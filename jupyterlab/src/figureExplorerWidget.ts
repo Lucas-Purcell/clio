@@ -315,13 +315,16 @@ export class FigureExplorerWidget extends Widget {
 
         const grid = document.createElement("div");
         grid.className = "jp-FigureExplorer-comparisonGrid";
+        const supportsResizableComparison =
+            this.hasClass("jp-mod-externalWindow") ||
+            this.hasClass("jp-mod-tabGallery");
         grid.classList.toggle(
             "jp-mod-resizable",
-            this.hasClass("jp-mod-externalWindow") && selected.length === 2
+            supportsResizableComparison && selected.length === 2
         );
         grid.classList.toggle(
             "jp-mod-scrollable",
-            this.hasClass("jp-mod-externalWindow") && selected.length > 4
+            supportsResizableComparison && selected.length > 4
         );
         for (const [index, figure] of selected.entries()) {
             if (index > 0 && grid.classList.contains("jp-mod-resizable")) {

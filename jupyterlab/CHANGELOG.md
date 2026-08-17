@@ -7,8 +7,9 @@ All notable changes to Clio for JupyterLab are documented in this file.
 ### Changed
 
 - Updated the public repository and package metadata for Clio.
-- Added draggable dividers in external-window comparison mode so adjacent figures can be resized independently.
-- Added adaptive external comparison layouts: two figures resize side by side, three or four stack in a grid, and five or more scroll within the comparison area.
+- Added draggable dividers in tab and external-window comparison modes so adjacent figures can be resized independently.
+- Added adaptive tab and external-window comparison layouts: two figures resize side by side, three or four stack in a grid, and five or more scroll within the comparison area.
+- Removed external-gallery viewport caps so previews and comparisons use the full available window height.
 - Updated the add-tag control with the shared Clio tag icon.
 
 ## [0.1.14] - 2026-08-17

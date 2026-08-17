@@ -457,10 +457,6 @@
 }
 
 .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-preview img {
-  max-height: 48vh;
-}
-
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-previewImage {
   max-height: none;
 }
 
@@ -661,14 +657,23 @@
   display: none;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  max-height: min(68vh, 720px);
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+  max-height: none;
   overflow: hidden;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparison {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -677,27 +682,49 @@
   padding-bottom: 4px;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonCard {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonCard {
+  display: flex;
+  flex-direction: column;
   flex: var(--jp-figure-explorer-comparison-size, 1) 1 0;
+  min-height: 0;
   min-width: 180px;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-scrollable {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonViewport {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-scrollable {
   overflow-y: auto;
   padding-right: 4px;
+  grid-auto-rows: max-content;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid:not(.jp-mod-resizable) .jp-FigureExplorer-comparisonViewport {
-  height: min(30vh, 300px);
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid:not(.jp-mod-resizable) .jp-FigureExplorer-comparisonViewport {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard h4,
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard .jp-FigureExplorer-tags {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid:not(.jp-mod-resizable) .jp-FigureExplorer-comparisonCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-scrollable .jp-FigureExplorer-comparisonViewport {
+  flex: 0 0 260px;
+}
+
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonCard h4,
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonCard .jp-FigureExplorer-tags {
   text-align: center;
   justify-content: center;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider {
   position: relative;
   display: block;
   flex: 0 0 12px;
@@ -706,7 +733,7 @@
   touch-action: none;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider::after {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider::after {
   position: absolute;
   top: 8px;
   bottom: 8px;
@@ -718,8 +745,8 @@
   transition: background 120ms ease, width 120ms ease, left 120ms ease;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider:hover::after,
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider.jp-mod-resizing::after {
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider:hover::after,
+.jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider.jp-mod-resizing::after {
   left: 4px;
   width: 4px;
   background: var(--jp-brand-color1);
@@ -910,15 +937,15 @@
     grid-template-rows: minmax(240px, 1fr) minmax(180px, 1fr);
   }
 
-  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid,
-  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
+  .jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid,
+  .jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
     overflow-y: auto;
   }
 
-  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider {
+  .jp-FigureExplorer:is(.jp-mod-externalWindow, .jp-mod-tabGallery) .jp-FigureExplorer-comparisonDivider {
     display: none;
   }
 }
