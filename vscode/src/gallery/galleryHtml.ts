@@ -11,6 +11,11 @@ const script = fs.readFileSync(
     "utf8"
 );
 
+const tagIcon = fs.readFileSync(
+    path.join(__dirname, "..", "resources", "tag.svg"),
+    "utf8"
+).replaceAll("black", "currentColor");
+
 function createNonce(): string {
     const alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -97,7 +102,7 @@ ${css}
                 title="Add tag filter"
                 aria-label="Add tag filter"
             >
-                <svg class="tag-plus-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="tag-plus" d="M2 12h5.5M4.75 9.25v5.5"/><path class="tag-fill" fill-rule="evenodd" d="M11 4h5l5 5-6 6-5-5V4Zm3.5 2.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z"/></svg>
+                ${tagIcon}
             </button>
 
             <div id="tag-panel" class="tag-panel"></div>

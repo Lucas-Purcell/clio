@@ -1,14 +1,17 @@
 import { FigureRecord, imageStore, NotebookFigures } from "@clio/shared";
 import { Widget } from "@lumino/widgets";
 import { PDFDocument } from "pdf-lib";
+import tagSvg from "../style/tag.svg";
 
 type Scope = "notebook" | "all";
 type TitleFilter = "all" | "titled" | "untitled";
 type GalleryIcon = "tag" | "image" | "pdf" | "download" | "notebook" | "notebooks" | "locate";
 
+const tagIconSvg = tagSvg.replaceAll("black", "currentColor");
+
 function galleryIcon(icon: GalleryIcon): string {
     const icons: Record<GalleryIcon, string> = {
-        tag: '<svg class="jp-FigureExplorer-tagPlusIcon" viewBox="0 0 24 24" aria-hidden="true"><path class="jp-FigureExplorer-tagPlus" d="M2 12h5.5M4.75 9.25v5.5"/><path class="jp-FigureExplorer-tagFill" fill-rule="evenodd" d="M11 4h5l5 5-6 6-5-5V4Zm3.5 2.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z"/></svg>',
+        tag: tagIconSvg,
         image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5.5 5.5"/></svg>',
         pdf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6Z"/><path d="M14 2v5h5"/><text x="7" y="16" textLength="10" lengthAdjust="spacingAndGlyphs">PDF</text></svg>',
         download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg>',
