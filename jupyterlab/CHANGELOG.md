@@ -7,6 +7,7 @@ All notable changes to Clio for JupyterLab are documented in this file.
 ### Changed
 
 - Updated the public repository and package metadata for Clio.
+- Added draggable dividers in external-window comparison mode so adjacent figures can be resized independently.
 
 ## [0.1.14] - 2026-08-17
 

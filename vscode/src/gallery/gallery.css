@@ -905,6 +905,10 @@ h1 {
     min-width: 0;
 }
 
+.comparison-divider {
+    display: none;
+}
+
 .comparison-card-content {
     padding-top: 6px;
 }
@@ -1117,6 +1121,49 @@ body.editor-mode.comparison-mode .comparison-image {
     height: auto;
     max-height: 70vh;
     object-fit: contain;
+}
+
+/* In a gallery editor (including a second VS Code window), comparison cards
+   form a resizable row so plots with different aspect ratios can share space. */
+body.editor-mode.comparison-mode .comparison-grid {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+body.editor-mode.comparison-mode .comparison-card {
+    flex: var(--comparison-card-size, 1) 1 0;
+    min-width: 180px;
+}
+
+body.editor-mode.comparison-mode .comparison-divider {
+    position: relative;
+    display: block;
+    flex: 0 0 12px;
+    width: 12px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+body.editor-mode.comparison-mode .comparison-divider::after {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 5px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--vscode-panel-border);
+    content: "";
+    transition: background 120ms ease, width 120ms ease, left 120ms ease;
+}
+
+body.editor-mode.comparison-mode .comparison-divider:hover::after,
+body.editor-mode.comparison-mode .comparison-divider.resizing::after {
+    left: 4px;
+    width: 4px;
+    background: var(--vscode-focusBorder);
 }
 
 body.editor-mode.comparison-mode .comparison-image-loading {

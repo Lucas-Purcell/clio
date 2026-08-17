@@ -657,6 +657,51 @@
   margin: 8px 0;
 }
 
+.jp-FigureExplorer-comparisonDivider {
+  display: none;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard {
+  flex: var(--jp-figure-explorer-comparison-size, 1) 1 0;
+  min-width: 180px;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider {
+  position: relative;
+  display: block;
+  flex: 0 0 12px;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider::after {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--jp-border-color2);
+  content: "";
+  transition: background 120ms ease, width 120ms ease, left 120ms ease;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider:hover::after,
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider.jp-mod-resizing::after {
+  left: 4px;
+  width: 4px;
+  background: var(--jp-brand-color1);
+}
+
 .jp-FigureExplorer-contextMenu {
   position: fixed;
   z-index: 1000;
@@ -840,5 +885,15 @@
       "thumbnails";
     grid-template-columns: 1fr;
     grid-template-rows: minmax(240px, 1fr) minmax(180px, 1fr);
+  }
+
+  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider {
+    display: none;
   }
 }

@@ -42,6 +42,7 @@ export class FigureExplorerWidget extends Widget {
         panX: number;
         panY: number;
     }>();
+    private readonly comparisonCardSizes = new Map<string, number>();
     private readonly activeTags = new Set<string>();
     private readonly objectUrls = new Map<string, { url: string; version: string }>();
     private readonly previewCropUrls = new Map<string, { url: string; version: string }>();
@@ -312,8 +313,20 @@ export class FigureExplorerWidget extends Widget {
         const grid = document.createElement("div");
         grid.className = "jp-FigureExplorer-comparisonGrid";
         for (const [index, figure] of selected.entries()) {
+            if (index > 0 && this.hasClass("jp-mod-externalWindow")) {
+                grid.append(this.createComparisonDivider(
+                    selected[index - 1],
+                    figure
+                ));
+            }
+
             const card = document.createElement("article");
             card.className = "jp-FigureExplorer-comparisonCard";
+            card.dataset.figureId = figure.id;
+            card.style.setProperty(
+                "--jp-figure-explorer-comparison-size",
+                String(this.comparisonCardSizes.get(figure.id) ?? 1)
+            );
             const viewport = document.createElement("div");
             viewport.className = "jp-FigureExplorer-comparisonViewport";
             const image = document.createElement("img");
@@ -356,6 +369,85 @@ export class FigureExplorerWidget extends Widget {
         }
         comparison.append(grid);
         return comparison;
+    }
+
+    private createComparisonDivider(
+        leftFigure: FigureRecord,
+        rightFigure: FigureRecord
+    ): HTMLElement {
+        const divider = document.createElement("div");
+        divider.className = "jp-FigureExplorer-comparisonDivider";
+        divider.setAttribute("role", "separator");
+        divider.setAttribute("aria-orientation", "vertical");
+        divider.title = "Drag to resize figures";
+
+        divider.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+
+            const grid = divider.parentElement;
+            const leftCard = grid?.querySelector<HTMLElement>(
+                `[data-figure-id="${leftFigure.id}"]`
+            );
+            const rightCard = grid?.querySelector<HTMLElement>(
+                `[data-figure-id="${rightFigure.id}"]`
+            );
+
+            if (!grid || !leftCard || !rightCard) {
+                return;
+            }
+
+            event.preventDefault();
+            const leftBounds = leftCard.getBoundingClientRect();
+            const rightBounds = rightCard.getBoundingClientRect();
+            const combinedWidth = leftBounds.width + rightBounds.width;
+            const minimumWidth = 180;
+
+            if (combinedWidth <= minimumWidth * 2) {
+                return;
+            }
+
+            const startX = event.clientX;
+            const leftWeight = this.comparisonCardSizes.get(leftFigure.id) ?? 1;
+            const rightWeight = this.comparisonCardSizes.get(rightFigure.id) ?? 1;
+            const combinedWeight = leftWeight + rightWeight;
+            divider.setPointerCapture(event.pointerId);
+            divider.classList.add("jp-mod-resizing");
+
+            const resize = (moveEvent: PointerEvent): void => {
+                const nextLeftWidth = Math.min(
+                    combinedWidth - minimumWidth,
+                    Math.max(minimumWidth, leftBounds.width + moveEvent.clientX - startX)
+                );
+                const nextLeftWeight = combinedWeight * nextLeftWidth / combinedWidth;
+                const nextRightWeight = combinedWeight - nextLeftWeight;
+
+                this.comparisonCardSizes.set(leftFigure.id, nextLeftWeight);
+                this.comparisonCardSizes.set(rightFigure.id, nextRightWeight);
+                leftCard.style.setProperty(
+                    "--jp-figure-explorer-comparison-size",
+                    String(nextLeftWeight)
+                );
+                rightCard.style.setProperty(
+                    "--jp-figure-explorer-comparison-size",
+                    String(nextRightWeight)
+                );
+            };
+
+            const stop = (): void => {
+                divider.classList.remove("jp-mod-resizing");
+                divider.removeEventListener("pointermove", resize);
+                divider.removeEventListener("pointerup", stop);
+                divider.removeEventListener("pointercancel", stop);
+            };
+
+            divider.addEventListener("pointermove", resize);
+            divider.addEventListener("pointerup", stop);
+            divider.addEventListener("pointercancel", stop);
+        });
+
+        return divider;
     }
 
     private setupComparisonZoom(

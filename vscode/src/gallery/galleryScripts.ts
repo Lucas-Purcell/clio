@@ -134,6 +134,8 @@ interface ComparisonImageTransform {
 const comparisonTransforms =
     new Map<string, ComparisonImageTransform>();
 
+const comparisonCardSizes = new Map<string, number>();
+
 let comparisonDragging = false;
 let comparisonDragKey: string | undefined;
 let comparisonDragStartX = 0;
@@ -941,7 +943,7 @@ function renderComparison(): void {
 
         '<div class="comparison-grid">' +
             figures
-                .map((figure) => {
+                .map((figure, index) => {
                     const figureTitle =
                         figure.title ||
                         "Figure " +
@@ -998,8 +1000,14 @@ function renderComparison(): void {
                               "</div>"
                             : "";
 
-                    return (
-                        '<article class="comparison-card">' +
+                    const comparisonSize =
+                        comparisonCardSizes.get(figure.key) ?? 1;
+                    const card =
+                        '<article class="comparison-card" data-key="' +
+                            escapeHtml(figure.key) +
+                            '" style="--comparison-card-size: ' +
+                            comparisonSize +
+                            '">' +
 
                             imageHtml +
 
@@ -1017,8 +1025,18 @@ function renderComparison(): void {
 
                             "</div>" +
 
-                        "</article>"
-                    );
+                        "</article>";
+
+                    const nextFigure = figures[index + 1];
+                    const divider = nextFigure
+                        ? '<div class="comparison-divider" role="separator" aria-orientation="vertical" title="Drag to resize figures" data-left-key="' +
+                            escapeHtml(figure.key) +
+                            '" data-right-key="' +
+                            escapeHtml(nextFigure.key) +
+                            '"></div>'
+                        : "";
+
+                    return card + divider;
                 })
                 .join("") +
         "</div>";
@@ -1050,6 +1068,8 @@ function renderComparison(): void {
                 image
             );
         });
+
+    setupComparisonDividers();
 
     preview
         .querySelectorAll<HTMLButtonElement>(".comparison-reset-zoom")
@@ -1134,6 +1154,87 @@ function renderComparison(): void {
         "click",
         exitComparisonMode
     );
+}
+
+function setupComparisonDividers(): void {
+    if (!document.body.classList.contains("editor-mode")) {
+        return;
+    }
+
+    preview
+        .querySelectorAll<HTMLElement>(".comparison-divider")
+        .forEach((divider) => {
+            divider.addEventListener("pointerdown", (event) => {
+                if (event.button !== 0) {
+                    return;
+                }
+
+                const grid = divider.parentElement;
+                const leftKey = divider.dataset.leftKey;
+                const rightKey = divider.dataset.rightKey;
+                const cards = Array.from(
+                    grid?.querySelectorAll<HTMLElement>(".comparison-card") ?? []
+                );
+                const leftCard = cards.find((card) => card.dataset.key === leftKey);
+                const rightCard = cards.find((card) => card.dataset.key === rightKey);
+
+                if (!leftKey || !rightKey || !leftCard || !rightCard) {
+                    return;
+                }
+
+                event.preventDefault();
+                const leftBounds = leftCard.getBoundingClientRect();
+                const rightBounds = rightCard.getBoundingClientRect();
+                const combinedWidth = leftBounds.width + rightBounds.width;
+                const minimumWidth = 180;
+
+                if (combinedWidth <= minimumWidth * 2) {
+                    return;
+                }
+
+                const startX = event.clientX;
+                const leftWeight = comparisonCardSizes.get(leftKey) ?? 1;
+                const rightWeight = comparisonCardSizes.get(rightKey) ?? 1;
+                const combinedWeight = leftWeight + rightWeight;
+                divider.setPointerCapture(event.pointerId);
+                divider.classList.add("resizing");
+
+                const resize = (moveEvent: PointerEvent): void => {
+                    const nextLeftWidth = Math.min(
+                        combinedWidth - minimumWidth,
+                        Math.max(
+                            minimumWidth,
+                            leftBounds.width + moveEvent.clientX - startX
+                        )
+                    );
+                    const nextLeftWeight =
+                        combinedWeight * nextLeftWidth / combinedWidth;
+                    const nextRightWeight = combinedWeight - nextLeftWeight;
+
+                    comparisonCardSizes.set(leftKey, nextLeftWeight);
+                    comparisonCardSizes.set(rightKey, nextRightWeight);
+                    leftCard.style.setProperty(
+                        "--comparison-card-size",
+                        String(nextLeftWeight)
+                    );
+                    rightCard.style.setProperty(
+                        "--comparison-card-size",
+                        String(nextRightWeight)
+                    );
+                };
+
+                const stop = (): void => {
+                    divider.classList.remove("resizing");
+                    divider.removeEventListener("pointermove", resize);
+                    divider.removeEventListener("pointerup", stop);
+                    divider.removeEventListener("pointercancel", stop);
+                };
+
+                divider.addEventListener("pointermove", resize);
+                divider.addEventListener("pointerup", stop);
+                divider.addEventListener("pointercancel", stop);
+            });
+        });
 }
 
 function setupComparisonImageInteractions(
