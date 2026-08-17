@@ -1130,7 +1130,7 @@ body.editor-mode.comparison-mode .comparison-image {
 body.editor-mode.comparison-mode .comparison-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    align-items: stretch;
     gap: 12px;
     flex: 1 1 auto;
     min-height: 0;
@@ -1171,7 +1171,9 @@ body.editor-mode.comparison-mode .comparison-grid:not(.comparison-grid--resizabl
 body.editor-mode.comparison-mode .comparison-grid:not(.comparison-grid--resizable) .comparison-card {
     display: flex;
     flex-direction: column;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
 }
 
 body.editor-mode.comparison-mode .comparison-grid.comparison-grid--scrollable .comparison-image-viewport {
@@ -1549,6 +1551,14 @@ body.comparison-mode .comparison-image {
 }
 
 body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-image-viewport {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+
+/* Keep each card within its allocated grid row. This rule deliberately follows
+   the shared comparison viewport size so it cannot reintroduce a fixed height. */
+body.editor-mode.comparison-mode .comparison-grid:not(.comparison-grid--resizable) .comparison-image-viewport {
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
