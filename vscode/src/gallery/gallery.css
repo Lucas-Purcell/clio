@@ -1126,19 +1126,44 @@ body.editor-mode.comparison-mode .comparison-image {
 /* In a gallery editor (including a second VS Code window), comparison cards
    form a resizable row so plots with different aspect ratios can share space. */
 body.editor-mode.comparison-mode .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px;
+    max-height: min(68vh, 720px);
+    overflow: hidden;
+}
+
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable {
     display: flex;
     align-items: stretch;
     gap: 0;
     overflow-x: auto;
+    overflow-y: hidden;
     padding-bottom: 4px;
 }
 
-body.editor-mode.comparison-mode .comparison-card {
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-card {
     flex: var(--comparison-card-size, 1) 1 0;
     min-width: 180px;
 }
 
-body.editor-mode.comparison-mode .comparison-divider {
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--scrollable {
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+body.editor-mode.comparison-mode .comparison-grid:not(.comparison-grid--resizable) .comparison-image-viewport {
+    height: min(30vh, 300px);
+}
+
+body.editor-mode.comparison-mode .comparison-card-content,
+body.editor-mode.comparison-mode .comparison-card .tags {
+    text-align: center;
+    justify-content: center;
+}
+
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-divider {
     position: relative;
     display: block;
     flex: 0 0 12px;
@@ -1147,7 +1172,7 @@ body.editor-mode.comparison-mode .comparison-divider {
     touch-action: none;
 }
 
-body.editor-mode.comparison-mode .comparison-divider::after {
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-divider::after {
     position: absolute;
     top: 8px;
     bottom: 8px;
@@ -1159,8 +1184,8 @@ body.editor-mode.comparison-mode .comparison-divider::after {
     transition: background 120ms ease, width 120ms ease, left 120ms ease;
 }
 
-body.editor-mode.comparison-mode .comparison-divider:hover::after,
-body.editor-mode.comparison-mode .comparison-divider.resizing::after {
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-divider:hover::after,
+body.editor-mode.comparison-mode .comparison-grid.comparison-grid--resizable .comparison-divider.resizing::after {
     left: 4px;
     width: 4px;
     background: var(--vscode-focusBorder);

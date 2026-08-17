@@ -913,6 +913,12 @@ function renderComparison(): void {
 
     source.innerHTML = "";
 
+    const comparisonLayout = figures.length === 2
+        ? "comparison-grid--resizable"
+        : figures.length > 4
+            ? "comparison-grid--scrollable"
+            : "comparison-grid--stacked";
+
     preview.innerHTML =
         '<div class="comparison-header">' +
             "<div>" +
@@ -941,7 +947,7 @@ function renderComparison(): void {
 
         "</div>" +
 
-        '<div class="comparison-grid">' +
+        '<div class="comparison-grid ' + comparisonLayout + '">' +
             figures
                 .map((figure, index) => {
                     const figureTitle =
@@ -1028,7 +1034,7 @@ function renderComparison(): void {
                         "</article>";
 
                     const nextFigure = figures[index + 1];
-                    const divider = nextFigure
+                    const divider = figures.length === 2 && nextFigure
                         ? '<div class="comparison-divider" role="separator" aria-orientation="vertical" title="Drag to resize figures" data-left-key="' +
                             escapeHtml(figure.key) +
                             '" data-right-key="' +

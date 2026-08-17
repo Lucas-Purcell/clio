@@ -662,19 +662,42 @@
 }
 
 .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  max-height: min(68vh, 720px);
+  overflow: hidden;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
   display: flex;
   align-items: stretch;
   gap: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard {
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonCard {
   flex: var(--jp-figure-explorer-comparison-size, 1) 1 0;
   min-width: 180px;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider {
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-scrollable {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid:not(.jp-mod-resizable) .jp-FigureExplorer-comparisonViewport {
+  height: min(30vh, 300px);
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard h4,
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonCard .jp-FigureExplorer-tags {
+  text-align: center;
+  justify-content: center;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider {
   position: relative;
   display: block;
   flex: 0 0 12px;
@@ -683,7 +706,7 @@
   touch-action: none;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider::after {
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider::after {
   position: absolute;
   top: 8px;
   bottom: 8px;
@@ -695,8 +718,8 @@
   transition: background 120ms ease, width 120ms ease, left 120ms ease;
 }
 
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider:hover::after,
-.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider.jp-mod-resizing::after {
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider:hover::after,
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable .jp-FigureExplorer-comparisonDivider.jp-mod-resizing::after {
   left: 4px;
   width: 4px;
   background: var(--jp-brand-color1);
@@ -887,10 +910,12 @@
     grid-template-rows: minmax(240px, 1fr) minmax(180px, 1fr);
   }
 
-  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid {
+  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid,
+  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonGrid.jp-mod-resizable {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
+    overflow-y: auto;
   }
 
   .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-comparisonDivider {

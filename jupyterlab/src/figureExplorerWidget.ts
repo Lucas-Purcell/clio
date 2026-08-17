@@ -315,8 +315,16 @@ export class FigureExplorerWidget extends Widget {
 
         const grid = document.createElement("div");
         grid.className = "jp-FigureExplorer-comparisonGrid";
+        grid.classList.toggle(
+            "jp-mod-resizable",
+            this.hasClass("jp-mod-externalWindow") && selected.length === 2
+        );
+        grid.classList.toggle(
+            "jp-mod-scrollable",
+            this.hasClass("jp-mod-externalWindow") && selected.length > 4
+        );
         for (const [index, figure] of selected.entries()) {
-            if (index > 0 && this.hasClass("jp-mod-externalWindow")) {
+            if (index > 0 && grid.classList.contains("jp-mod-resizable")) {
                 grid.append(this.createComparisonDivider(
                     selected[index - 1],
                     figure

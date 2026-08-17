@@ -8,6 +8,7 @@ All notable changes to Clio for VS Code are documented in this file.
 
 - Updated the public repository and package metadata for Clio.
 - Added draggable dividers in editor-window comparison mode so adjacent figures can be resized independently.
+- Added adaptive external comparison layouts: two figures resize side by side, three or four stack in a grid, and five or more scroll within the comparison area.
 - Updated the add-tag control with the shared Clio tag icon.
 
 ## [0.1.14] - 2026-08-17
