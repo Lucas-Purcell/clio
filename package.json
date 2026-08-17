@@ -1,0 +1,15 @@
+{
+  "name": "clio-figure-explorer-workspace",
+  "version": "0.1.14",
+  "private": true,
+  "packageManager": "yarn@4.18.0",
+  "scripts": {
+    "build:jupyterlab": "yarn workspace @clio/jupyter build && jupyter builder build jupyterlab",
+    "package:jupyterlab": "yarn build:jupyterlab && node scripts/prepare-jupyterlab-python-package.mjs && python -m build --outdir python/dist python"
+  },
+  "workspaces": [
+    "shared",
+    "vscode",
+    "jupyterlab"
+  ]
+}

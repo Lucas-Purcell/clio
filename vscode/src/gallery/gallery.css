@@ -1,0 +1,1491 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    display: grid;
+    grid-template-rows: auto minmax(180px, 0.9fr) minmax(0, 1.1fr) auto;
+    height: 100vh;
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    color: var(--vscode-foreground);
+    background: var(--vscode-sideBar-background);
+    font-family: var(--vscode-font-family);
+}
+
+/* ─────────────────────────────────────────────
+   Header
+   ───────────────────────────────────────────── */
+
+header {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+h1 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────
+   Search
+   ───────────────────────────────────────────── */
+
+.search-wrap {
+    position: relative;
+    min-width: 0;
+    margin-top: 9px;
+}
+
+.search-icon {
+    position: absolute;
+    top: 50%;
+    left: 7px;
+    width: 13px;
+    height: 13px;
+    transform: translateY(-50%);
+    color: var(--vscode-descriptionForeground);
+    pointer-events: none;
+}
+
+.search {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    padding: 5px 28px 5px 27px;
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: 3px;
+    outline: none;
+    color: var(--vscode-input-foreground);
+    background: var(--vscode-input-background);
+    font: inherit;
+    font-size: 12px;
+}
+
+.search:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+.search::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+}
+
+.search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+}
+
+.clear-search {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    display: none;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    transform: translateY(-50%);
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-descriptionForeground);
+    background: transparent;
+    font-size: 14px;
+    line-height: 20px;
+    cursor: pointer;
+}
+
+.clear-search:hover {
+    color: var(--vscode-foreground);
+    background: var(--vscode-list-hoverBackground);
+}
+
+.clear-search.visible {
+    display: block;
+}
+
+/* ─────────────────────────────────────────────
+   Active search/filter state
+   ───────────────────────────────────────────── */
+
+.active-filters {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 7px;
+}
+
+.active-filters.visible {
+    display: flex;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    padding: 2px 5px 2px 7px;
+    border: 1px solid var(--vscode-focusBorder);
+    border-radius: 10px;
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    font-size: 10px;
+}
+
+.filter-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-chip-remove {
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--vscode-descriptionForeground);
+    background: transparent;
+    font-size: 12px;
+    line-height: 15px;
+    cursor: pointer;
+}
+
+.filter-chip-remove:hover {
+    color: var(--vscode-foreground);
+    background: var(--vscode-list-hoverBackground);
+}
+
+/* Tag filters */
+
+.tag-filter {
+    position: relative;
+}
+
+.add-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.add-tag .plus {
+    font-size: 13px;
+    line-height: 10px;
+}
+
+.tag-panel {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 5px);
+    left: 0;
+    display: none;
+    width: min(220px, calc(100vw - 24px));
+    max-height: 240px;
+    padding: 5px;
+    overflow-y: auto;
+    border: 1px solid var(
+        --vscode-widget-border,
+        var(--vscode-panel-border)
+    );
+    border-radius: 4px;
+    background: var(--vscode-menu-background);
+    box-shadow: 0 3px 8px var(--vscode-widget-shadow);
+}
+
+.tag-panel.open {
+    display: block;
+}
+
+.tag-option {
+    display: block;
+    width: 100%;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 2px;
+    color: var(--vscode-menu-foreground);
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.tag-option:hover {
+    color: var(--vscode-menu-selectionForeground);
+    background: var(--vscode-menu-selectionBackground);
+}
+
+.tag-option.active {
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.tag-option:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.tag-empty {
+    padding: 7px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+}
+
+/* ─────────────────────────────────────────────
+   Toolbar
+   ───────────────────────────────────────────── */
+
+.toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.toolbar-group {
+    display: flex;
+    min-width: 0;
+    border: 1px solid var(
+        --vscode-widget-border,
+        var(--vscode-panel-border)
+    );
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.control {
+    min-width: 0;
+    padding: 4px 8px;
+    border: 0;
+    border-right: 1px solid var(
+        --vscode-widget-border,
+        var(--vscode-panel-border)
+    );
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.control:last-child {
+    border-right: 0;
+}
+
+.control:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.control.active {
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+}
+
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    padding-inline: 6px !important;
+    font-size: 14px !important;
+    line-height: 1;
+}
+
+.icon-button svg,
+.add-tag svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+.add-tag.icon-button {
+    min-width: 42px;
+    height: 24px;
+    min-height: 24px;
+    padding-inline: 6px !important;
+    border: 0;
+    border-radius: 999px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+}
+
+.add-tag.icon-button:hover,
+.add-tag.icon-button.active {
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+}
+
+.add-tag svg {
+    width: 19px;
+    height: 19px;
+}
+
+.add-tag .tag-plus {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.25;
+}
+
+.add-tag .tag-fill {
+    fill: currentColor;
+    stroke: none;
+}
+
+.icon-button svg text {
+    fill: currentColor;
+    stroke: none;
+    font-family: var(--vscode-font-family);
+    font-size: 5px;
+    font-weight: 700;
+}
+
+.pdf-icon {
+    font-size: 10px !important;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+/* Scope selector */
+.scope-group {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.scope-group .control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+
+.scope-group .control svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+/* Filters dropdown */
+.filter-menu {
+    position: relative;
+}
+
+.filters-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.filters-button .chevron {
+    font-size: 9px;
+    opacity: 0.7;
+}
+
+.filter-panel {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 5px);
+    left: 0;
+    right: auto;
+    display: none;
+    min-width: 130px;
+    padding: 4px;
+    border: 1px solid var(
+        --vscode-widget-border,
+        var(--vscode-panel-border)
+    );
+    border-radius: 4px;
+    background: var(--vscode-menu-background);
+    box-shadow: 0 3px 8px var(--vscode-widget-shadow);
+}
+
+.filter-panel.open {
+    display: block;
+}
+
+.filter-panel.open-left {
+    left: auto;
+    right: 0;
+}
+
+.filter-option {
+    display: block;
+    width: 100%;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 2px;
+    color: var(--vscode-menu-foreground);
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.filter-option:hover {
+    color: var(--vscode-menu-selectionForeground);
+    background: var(--vscode-menu-selectionBackground);
+}
+
+.filter-option.active {
+    color: var(--vscode-menu-selectionForeground);
+    background: var(--vscode-menu-selectionBackground);
+}
+
+/* ─────────────────────────────────────────────
+   Result row
+   ───────────────────────────────────────────── */
+
+.result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    margin-top: 8px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+}
+
+.result-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+
+#count {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#reveal {
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+#reveal:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground);
+}
+
+#reveal:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+#reveal svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.9;
+}
+
+/* ─────────────────────────────────────────────
+   Thumbnail gallery
+   ───────────────────────────────────────────── */
+
+.thumbnails {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 88px);
+    gap: 7px;
+    max-height: none;
+    min-height: 0;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 10px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.thumbnail {
+    min-width: 0;
+    padding: 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--vscode-foreground);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.thumbnail:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.thumbnail.selected {
+    border-color: var(--vscode-focusBorder);
+    background: var(--vscode-list-activeSelectionBackground);
+}
+
+.thumbnail img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.35;
+    object-fit: contain;
+    background: white;
+}
+
+/* ─────────────────────────────────────────────
+   Preview
+   ───────────────────────────────────────────── */
+
+.preview {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    overflow: hidden;
+}
+
+.preview h2 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview-image-viewport {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    background: white;
+    user-select: none;
+}
+
+/* Tags */
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 7px;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 2px 7px;
+    border: 1px solid var(
+        --vscode-button-secondaryBackground
+    );
+    border-radius: 10px;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.tag:hover {
+    color: var(--vscode-foreground);
+    background: var(--vscode-list-hoverBackground);
+    border-color: var(--vscode-focusBorder);
+}
+
+.main-image {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    object-fit: contain;
+
+    transform-origin: center center;
+    will-change: transform;
+
+    user-select: none;
+    -webkit-user-drag: none;
+
+    cursor: zoom-in;
+}
+
+.main-image.loaded {
+    opacity: 1;
+}
+
+/* ─────────────────────────────────────────────
+   Source
+   ───────────────────────────────────────────── */
+
+.source {
+    display: none;
+    min-width: 0;
+    max-height: 100px;
+    margin: 0 12px;
+    overflow: hidden;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.source h2 {
+    margin: 10px 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.source pre {
+    max-width: 100%;
+    max-height: 72px;
+    overflow: hidden;
+    margin: 0;
+    padding: 8px;
+    background: var(--vscode-textCodeBlock-background);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.empty {
+    padding: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* ─────────────────────────────────────────────
+   Narrow sidebar behavior
+   ───────────────────────────────────────────── */
+
+@media (max-width: 360px) {
+    header {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .scope-label {
+        display: none;
+    }
+
+    .scope-group .control {
+        min-width: 28px;
+        padding-inline: 6px;
+    }
+
+    .filters-button {
+        min-width: 28px;
+        padding-inline: 7px;
+        font-size: 0;
+    }
+
+    .filters-button .chevron {
+        display: none;
+    }
+
+    .filters-button::after {
+        content: "☰";
+        font-size: 14px;
+    }
+
+    .thumbnails {
+        padding: 7px;
+        gap: 5px;
+        grid-template-columns: repeat(auto-fill, 88px);
+    }
+
+    .preview {
+        padding: 8px;
+    }
+
+    .source {
+        margin-left: 8px;
+        margin-right: 8px;
+    }
+
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ─────────────────────────────────────────────
+   Comparison selection
+   ───────────────────────────────────────────── */
+
+.thumbnail {
+    position: relative;
+    min-width: 0;
+    padding: 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--vscode-foreground);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.thumbnail.comparison-selected {
+    border-color: var(--vscode-button-background);
+    background: var(--vscode-list-hoverBackground);
+}
+
+.thumbnail.comparison-selected.selected {
+    border-color: var(--vscode-focusBorder);
+    background: var(--vscode-list-activeSelectionBackground);
+}
+
+.comparison-marker {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    z-index: 2;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    padding: 0;
+
+    border: 1px solid var(--vscode-focusBorder);
+    border-radius: 3px;
+
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 17px;
+    text-align: center;
+
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#compare {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+#download-selected {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    cursor: pointer;
+}
+
+#download-selected svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+#download-selected:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#download-selected:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+#compare:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#compare.active {
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+}
+
+#compare:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* ─────────────────────────────────────────────
+   Comparison mode
+   ───────────────────────────────────────────── */
+
+.comparison-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.comparison-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.comparison-count {
+    display: block;
+    margin-top: 2px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 10px;
+}
+
+#exit-comparison {
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+#exit-comparison:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(220px, 1fr)
+    );
+    gap: 10px;
+    padding: 12px;
+}
+
+.comparison-card {
+    min-width: 0;
+}
+
+.comparison-card-content {
+    padding-top: 6px;
+}
+
+.comparison-card-content h3 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.editor-mode .comparison-grid {
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(260px, 1fr)
+    );
+    gap: 12px;
+    padding: 0;
+}
+
+body.editor-mode .comparison-image {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+body.editor-mode .comparison-image-loading {
+    width: 100%;
+    height: 300px;
+}
+.comparison-image {
+    display: block;
+    width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    background: white;
+}
+
+.comparison-image-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100px;
+    color: var(--vscode-descriptionForeground);
+    background: white;
+    font-size: 11px;
+}
+
+.comparison-card h3 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comparison-location {
+    margin-top: 3px;
+    overflow: hidden;
+    color: var(--vscode-descriptionForeground);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comparison-card .tags {
+    margin-top: 6px;
+}
+
+.comparison-card pre {
+    max-width: 100%;
+    max-height: 120px;
+    overflow: auto;
+    margin: 7px 0 0;
+    padding: 6px;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-textCodeBlock-background);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 9px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+
+/* ─────────────────────────────────────────────
+   Editor tab layout
+   ───────────────────────────────────────────── */
+
+body.editor-mode {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.editor-mode header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+
+body.editor-mode .thumbnails {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-left: 1px solid var(--vscode-panel-border);
+    padding: 10px;
+
+    align-content: start;
+    align-items: start;
+}
+
+body.editor-mode .preview {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    overflow: hidden;
+    padding: 16px;
+}
+
+body.editor-mode .source {
+    display: none;
+}
+
+/* Make the main figure use the available preview area
+   rather than forcing a fixed height. */
+
+body.editor-mode .preview-image-viewport {
+    height: calc(100vh - 170px);
+    margin-top: 12px;
+}
+
+body.editor-mode .main-image {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    object-fit: contain;
+
+    transform-origin: center center;
+    will-change: transform;
+
+    user-select: none;
+    -webkit-user-drag: none;
+
+    cursor: zoom-in;
+}
+
+body.editor-mode .main-image.zoomed {
+    cursor: grab;
+}
+
+body.editor-mode .preview-image-viewport.panning {
+    cursor: grabbing;
+}
+
+body.editor-mode .preview-image-viewport.panning .main-image {
+    cursor: grabbing;
+}
+
+/* Keep the preview title and tags above the image. */
+
+body.editor-mode .preview h2 {
+    font-size: 15px;
+}
+
+body.editor-mode .preview .tags {
+    margin-top: 8px;
+}
+
+/* ─────────────────────────────────────────────
+   Editor comparison layout
+   ───────────────────────────────────────────── */
+
+body.editor-mode.comparison-mode {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+body.editor-mode.comparison-mode .preview {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+body.editor-mode.comparison-mode .comparison-grid {
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(min(220px, 100%), 1fr)
+    );
+    width: 100%;
+    padding: 0;
+}
+
+body.editor-mode.comparison-mode .comparison-image {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+body.editor-mode.comparison-mode .comparison-image-loading {
+    width: 100%;
+    height: 300px;
+}
+
+.thumbnail-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    margin-top: 3px;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.thumbnail-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+
+.thumbnail:hover .thumbnail-actions,
+.thumbnail:focus-within .thumbnail-actions {
+    opacity: 1;
+}
+
+.thumbnail-action {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 4px;
+    border: 1px solid var(
+        --vscode-widget-border,
+        var(--vscode-panel-border)
+    );
+    border-radius: 2px;
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    font: inherit;
+    font-size: 9px;
+    line-height: 14px;
+    cursor: pointer;
+}
+
+.thumbnail-action:hover {
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+}
+
+.preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.preview-header h2 {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.preview-actions {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+
+.preview-action {
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.preview-action:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.image-hover-actions {
+    position: absolute;
+    z-index: 3;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
+.image-hover-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    cursor: pointer;
+}
+
+.image-hover-actions button:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.preview-image-viewport:hover .image-hover-actions,
+.preview-image-viewport:focus-within .image-hover-actions,
+.comparison-image-viewport:hover .image-hover-actions,
+.comparison-image-viewport:focus-within .image-hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+body.editor-mode .preview-header {
+    gap: 12px;
+}
+
+body.editor-mode .preview-actions {
+    display: flex;
+}
+
+body.editor-mode .preview-action {
+    padding: 5px 9px;
+}
+
+.comparison-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.comparison-card-header h3 {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.comparison-card-actions {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.comparison-action {
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font: inherit;
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.comparison-action:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.figure-context-menu {
+    position: fixed;
+    z-index: 10000;
+
+    min-width: 150px;
+
+    padding: 4px;
+
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.figure-context-menu button {
+    display: block;
+
+    width: 100%;
+
+    padding: 6px 10px;
+
+    border: none;
+    border-radius: 2px;
+
+    background: transparent;
+    color: var(--vscode-menu-foreground);
+
+    text-align: left;
+    font: inherit;
+
+    cursor: pointer;
+}
+
+.figure-context-menu button:hover {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+}
+
+.comparison-header-actions {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 100%;
+}
+
+.comparison-header-actions button {
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.comparison-header-actions button:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#exit-comparison {
+    margin-left: 4px;
+}
+
+#thumbnails {
+    padding: 20px;
+    user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+}
+
+#thumbnails img {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+}
+
+.gallery-selection-rectangle {
+    pointer-events: none;
+}
+
+.gallery {
+    position: relative;
+}
+
+.gallery-selection-rectangle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 9999;
+
+    border: 1px solid var(--vscode-focusBorder);
+    background: var(--vscode-editor-selectionBackground);
+}
+
+.comparison-card {
+    overflow: hidden;
+}
+
+.comparison-image-viewport {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    overflow: hidden;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    touch-action: none;
+}
+
+.comparison-image {
+    display: block;
+
+    max-width: 100%;
+    max-height: 100%;
+
+    transform-origin: center center;
+
+    user-select: none;
+    -webkit-user-drag: none;
+
+    transition: transform 0.05s linear;
+}
+
+.comparison-image.zoomed {
+    cursor: grab;
+}
+
+.comparison-image-viewport.panning
+    .comparison-image {
+    cursor: grabbing;
+    transition: none;
+}
+
+/* Comparison figures must always fit their own viewport. The sidebar uses the
+   available gallery height rather than reserving space for hidden thumbnails. */
+body.comparison-mode:not(.editor-mode) {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+body.comparison-mode:not(.editor-mode) .preview {
+    grid-row: 2;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+body.comparison-mode .comparison-image-viewport {
+    height: clamp(180px, 40vh, 400px);
+}
+
+body.comparison-mode .comparison-image {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+body.editor-mode.comparison-mode .comparison-image-viewport {
+    height: min(52vh, 460px);
+}
+
+body.editor-mode.comparison-mode .comparison-image {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.preview-image-viewport {
+    position: relative;
+    overflow: hidden;
+}
+
+.main-image {
+    transform-origin: center center;
+    will-change: transform;
+    cursor: zoom-in;
+}
+
+.main-image.zoomed {
+    cursor: grab;
+}
+
+.preview-image-viewport.panning {
+    cursor: grabbing;
+}
+
+.preview-image-viewport.panning .main-image {
+    cursor: grabbing;
+}

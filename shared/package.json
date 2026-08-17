@@ -1,0 +1,17 @@
+{
+  "name": "@clio/shared",
+  "version": "0.1.14",
+  "private": true,
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

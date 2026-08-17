@@ -1,0 +1,844 @@
+.jp-FigureExplorer {
+  display: grid;
+  container-type: inline-size;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color0);
+  font-family: var(--jp-ui-font-family);
+}
+
+.jp-FigureExplorer h2 {
+  margin: 0 0 16px;
+  font-size: var(--jp-ui-font-size2);
+}
+
+.jp-FigureExplorer-header {
+  padding-bottom: 12px;
+  background: var(--jp-layout-color0);
+}
+
+.jp-FigureExplorer-controls button,
+.jp-FigureExplorer-resultActions button,
+.jp-FigureExplorer-zoomControls button,
+.jp-FigureExplorer-reveal,
+.jp-FigureExplorer-comparisonHeader button,
+.jp-FigureExplorer-comparisonCard button {
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color1);
+  font: inherit;
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.jp-FigureExplorer-controls button:hover,
+.jp-FigureExplorer-resultActions button:hover:not(:disabled),
+.jp-FigureExplorer-zoomControls button:hover,
+.jp-FigureExplorer-reveal:hover,
+.jp-FigureExplorer-comparisonHeader button:hover,
+.jp-FigureExplorer-comparisonCard button:hover {
+  border-color: var(--jp-border-color1);
+  background: var(--jp-layout-color2);
+}
+
+.jp-FigureExplorer button:focus-visible,
+.jp-FigureExplorerSidebar button:focus-visible {
+  outline: 2px solid var(--jp-brand-color1);
+  outline-offset: 1px;
+}
+
+.jp-FigureExplorer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.jp-FigureExplorer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.jp-FigureExplorer-search {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-input-background);
+  font: inherit;
+}
+
+.jp-FigureExplorer-searchWrap {
+  position: relative;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.jp-FigureExplorer-searchWrap .jp-FigureExplorer-search {
+  padding-right: 28px;
+}
+
+.jp-FigureExplorer-search::-webkit-search-cancel-button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.jp-FigureExplorer-clearSearch {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 3px;
+  color: var(--jp-ui-font-color2);
+  background: transparent;
+  font-size: 16px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-clearSearch:hover {
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+}
+
+.jp-FigureExplorer-scope.jp-mod-active {
+  border-color: var(--jp-brand-color1);
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-scope {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.jp-FigureExplorer-scope svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.jp-FigureExplorer-filterPicker {
+  margin-left: auto;
+}
+
+.jp-FigureExplorer-tagPicker {
+  position: relative;
+}
+
+.jp-FigureExplorer-filterPicker {
+  position: relative;
+}
+
+.jp-FigureExplorer-addTag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  min-height: 24px !important;
+  height: 24px;
+  padding-inline: 6px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+  white-space: nowrap;
+}
+
+.jp-FigureExplorer-addTag:hover {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1) !important;
+}
+
+.jp-FigureExplorer-addTag[aria-expanded="true"],
+.jp-FigureExplorer-addTag.jp-mod-active {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding-inline: 6px !important;
+  font-size: 14px !important;
+  line-height: 1;
+}
+
+.jp-FigureExplorer-iconButton svg,
+.jp-FigureExplorer-addTag svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.jp-FigureExplorer-addTag svg {
+  width: 19px;
+  height: 19px;
+}
+
+.jp-FigureExplorer-addTag .jp-FigureExplorer-tagPlus {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+}
+
+.jp-FigureExplorer-addTag .jp-FigureExplorer-tagFill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.jp-FigureExplorer-iconButton svg text {
+  fill: currentColor;
+  stroke: none;
+  font-family: var(--jp-ui-font-family);
+  font-size: 5px;
+  font-weight: 700;
+}
+
+.jp-FigureExplorer-pdfIcon {
+  font-size: 10px !important;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.jp-FigureExplorer-tagMenu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 150px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 5px;
+  background: var(--jp-layout-color1);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 16%);
+}
+
+.jp-FigureExplorer-filterMenu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 5px;
+  background: var(--jp-layout-color1);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 16%);
+}
+
+.jp-FigureExplorer-tagOption {
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--jp-ui-font-color1);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-tagOption:hover,
+.jp-FigureExplorer-tagOption.jp-mod-active {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-filterOption {
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--jp-ui-font-color1);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-filterOption:hover,
+.jp-FigureExplorer-filterOption.jp-mod-active {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.jp-FigureExplorer-filterChip {
+  padding: 2px 7px;
+  border: 1px solid var(--jp-brand-color1);
+  border-radius: 12px;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color1);
+  font-size: var(--jp-ui-font-size0);
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-count {
+  margin: 0;
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-FigureExplorer-resultRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.jp-FigureExplorer-resultActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.jp-FigureExplorer-empty {
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-FigureExplorer-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(92px, 100%), 92px));
+  grid-auto-rows: max-content;
+  align-content: start;
+  justify-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.jp-FigureExplorer-content {
+  display: grid;
+  grid-template-rows: minmax(180px, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.jp-FigureExplorer-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+  background: var(--jp-layout-color1);
+  overflow: hidden;
+}
+
+.jp-FigureExplorer-preview h3,
+.jp-FigureExplorer-preview p {
+  margin: 0 0 10px;
+}
+
+.jp-FigureExplorer-previewHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.jp-FigureExplorer-previewHeader h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jp-FigureExplorer-imageHoverActions {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.jp-FigureExplorer-imageHoverActions .jp-FigureExplorer-iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px !important;
+  border: 0;
+  border-radius: 3px;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.jp-FigureExplorer-imageHoverActions .jp-FigureExplorer-iconButton:hover {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-previewViewport:hover .jp-FigureExplorer-imageHoverActions,
+.jp-FigureExplorer-previewViewport:focus-within .jp-FigureExplorer-imageHoverActions,
+.jp-FigureExplorer-comparisonViewport:hover .jp-FigureExplorer-imageHoverActions,
+.jp-FigureExplorer-comparisonViewport:focus-within .jp-FigureExplorer-imageHoverActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-content,
+.jp-FigureExplorer.jp-mod-tabGallery .jp-FigureExplorer-content {
+  grid-template-areas: "preview thumbnails";
+  grid-template-columns: minmax(0, 3fr) minmax(130px, 2fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-grid,
+.jp-FigureExplorer.jp-mod-tabGallery .jp-FigureExplorer-grid {
+  grid-area: thumbnails;
+  grid-template-columns: repeat(auto-fill, 76px);
+  padding-left: 12px;
+  border-left: 1px solid var(--jp-border-color2);
+  height: 100%;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-preview,
+.jp-FigureExplorer.jp-mod-tabGallery .jp-FigureExplorer-preview {
+  grid-area: preview;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-preview img {
+  max-height: 48vh;
+}
+
+.jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-previewImage {
+  max-height: none;
+}
+
+.jp-FigureExplorer-preview img {
+  width: 100%;
+  min-height: 0;
+  max-height: 28vh;
+  flex: 1 1 auto;
+  object-fit: contain;
+  background: var(--jp-layout-color0);
+}
+
+.jp-FigureExplorer-previewViewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  background: white;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  cursor: zoom-in;
+}
+
+.jp-FigureExplorer-previewViewport.jp-mod-panning {
+  cursor: grabbing;
+}
+
+.jp-FigureExplorer-previewImage.jp-FigureExplorer-previewImage {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  flex: none;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+  -webkit-user-drag: none;
+}
+
+.jp-FigureExplorer-zoomControls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  margin: 0;
+}
+
+.jp-FigureExplorer-zoomControls button {
+  min-width: 24px;
+  padding: 2px 5px;
+}
+
+.jp-FigureExplorer-reveal {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.jp-FigureExplorer-reveal svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.jp-FigureExplorer-preview pre {
+  max-height: 72px;
+  min-height: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  color: var(--jp-ui-font-color2);
+  font: var(--jp-code-font-size) var(--jp-code-font-family);
+}
+
+.jp-FigureExplorer-card {
+  display: block;
+  padding: 4px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-card:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-FigureExplorer-card.jp-mod-selected {
+  border-color: var(--jp-brand-color1);
+  background: color-mix(in srgb, var(--jp-brand-color1) 20%, transparent);
+}
+
+.jp-FigureExplorer-card.jp-mod-multiSelected {
+  border-color: var(--jp-brand-color1);
+  background: color-mix(in srgb, var(--jp-brand-color1) 12%, transparent);
+}
+
+.jp-FigureExplorer-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.35;
+  max-height: 80px;
+  object-fit: contain;
+  background: white;
+}
+
+.jp-FigureExplorer-thumbnailLabel {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jp-FigureExplorer-selectionRectangle {
+  position: absolute;
+  z-index: 3;
+  border: 1px solid var(--jp-brand-color1);
+  background: color-mix(in srgb, var(--jp-brand-color1) 18%, transparent);
+  pointer-events: none;
+}
+
+.jp-FigureExplorer-comparison {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+  background: var(--jp-layout-color1);
+}
+
+.jp-FigureExplorer-comparison h3 {
+  margin: 0 0 12px;
+}
+
+.jp-FigureExplorer-comparisonHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.jp-FigureExplorer-resultActions {
+  max-width: 100%;
+}
+
+.jp-FigureExplorer-comparisonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+
+.jp-FigureExplorer-comparisonCard {
+  padding: 8px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 5px;
+  background: var(--jp-layout-color0);
+}
+
+.jp-FigureExplorer-comparisonCard img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  background: white;
+  -webkit-user-drag: none;
+}
+
+.jp-FigureExplorer-comparisonViewport {
+  position: relative;
+  display: flex;
+  height: 260px;
+  overflow: hidden;
+  background: white;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  cursor: zoom-in;
+}
+
+.jp-FigureExplorer-comparisonCard h4 {
+  margin: 8px 0;
+}
+
+.jp-FigureExplorer-contextMenu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  min-width: 145px;
+  padding: 4px;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 5px;
+  background: var(--jp-layout-color1);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+}
+
+.jp-FigureExplorer-contextMenu button {
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--jp-ui-font-color1);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-contextMenu button:hover {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+.jp-FigureExplorer-notice {
+  position: fixed;
+  z-index: 1001;
+  right: 16px;
+  bottom: 16px;
+  max-width: 360px;
+  padding: 8px 12px;
+  border-radius: 3px;
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 25%);
+}
+
+.jp-FigureExplorer-card h3,
+.jp-FigureExplorer-card p {
+  margin: 0;
+}
+
+.jp-FigureExplorer-card h3 {
+  font-size: var(--jp-ui-font-size1);
+}
+
+.jp-FigureExplorer-card p {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+}
+
+.jp-FigureExplorer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.jp-FigureExplorer-previewTag {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--jp-brand-color1);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.jp-FigureExplorer-previewTag:hover {
+  color: var(--jp-ui-inverse-font-color1);
+  background: var(--jp-brand-color1);
+}
+
+@container (max-width: 340px) {
+  .jp-FigureExplorer-scope {
+    min-width: 28px;
+    padding-inline: 6px !important;
+  }
+
+  .jp-FigureExplorer-scopeLabel {
+    display: none;
+  }
+
+  .jp-FigureExplorer-filtersButton {
+    min-width: 28px;
+    padding-inline: 7px !important;
+    font-size: 0 !important;
+  }
+
+  .jp-FigureExplorer-filtersButton::after {
+    content: "☰";
+    font-size: 14px;
+  }
+}
+
+.jp-FigureExplorer-card button {
+  align-self: flex-start;
+}
+
+.jp-FigureExplorerSidebar {
+  min-width: 220px;
+  padding: 10px;
+  overflow: auto;
+  background: var(--jp-layout-color1);
+  font-family: var(--jp-ui-font-family);
+}
+
+.jp-FigureExplorerSidebar h2 {
+  margin: 0 0 10px;
+  font-size: var(--jp-ui-font-size1);
+}
+
+.jp-FigureExplorerSidebar-notebook {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.jp-FigureExplorerSidebar-notebookHeader {
+  display: flex;
+  align-items: center;
+}
+
+.jp-FigureExplorerSidebar-disclosure {
+  width: 28px;
+  min-width: 28px;
+  padding: 2px 4px;
+  border: 0;
+  color: var(--jp-ui-font-color2);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.jp-FigureExplorerSidebar-disclosure:hover {
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+}
+
+.jp-FigureExplorerSidebar-notebookButton,
+.jp-FigureExplorerSidebar-figureButton {
+  overflow: hidden;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--jp-ui-font-color1);
+  background: transparent;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.jp-FigureExplorerSidebar-notebookButton {
+  flex: 1;
+  font-weight: 600;
+}
+
+.jp-FigureExplorerSidebar-figureButton {
+  padding-left: 18px;
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-FigureExplorerSidebar-notebookButton:hover,
+.jp-FigureExplorerSidebar-figureButton:hover {
+  background: var(--jp-layout-color2);
+}
+
+@media (max-width: 900px) {
+  .jp-FigureExplorer-content {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .jp-FigureExplorer.jp-mod-externalWindow .jp-FigureExplorer-content {
+    grid-template-areas:
+      "preview"
+      "thumbnails";
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 1fr) minmax(180px, 1fr);
+  }
+}

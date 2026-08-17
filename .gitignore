@@ -1,0 +1,28 @@
+# Operating-system and editor files
+.DS_Store
+
+# Local environments and dependencies
+.venv/
+node_modules/
+**/node_modules/
+.yarn/cache/
+.yarn/install-state.gz
+
+# Generated build and package artifacts
+vscode/dist/
+jupyterlab/lib/
+jupyterlab/static/
+shared/lib/
+python/build/
+python/dist/
+python/labextension/
+python/*.egg-info/
+releases/
+
+# Local notebooks and temporary working files
+/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+/Untitled*.ipynb
+/jupyterlab/Untitled.ipynb
+outputs/
+work/

@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Clio VS Code Extension",
+      "type": "shell",
+      "command": "corepack yarn workspace clio-figure-explorer exec node esbuild.js",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clio-jupyter"
+version = "0.1.14"
+description = "Clio: browse figures generated in Jupyter notebooks from JupyterLab."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "LPurcell" }]
+classifiers = [
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+    "Programming Language :: Python :: 3",
+]
+dependencies = ["jupyterlab>=4,<5"]
+
+[project.urls]
+Homepage = "https://github.com/Lucas-Purcell/clio"
+Repository = "https://github.com/Lucas-Purcell/clio"
+
+[tool.setuptools.packages.find]
+include = ["clio_jupyter*"]

@@ -1,0 +1,165 @@
+{
+  "name": "clio-figure-explorer",
+  "displayName": "Clio – Figure Explorer",
+  "description": "Clio: browse figures generated in Jupyter notebooks.",
+  "version": "0.1.14",
+  "publisher": "LPurcell",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lucas-Purcell/clio"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Notebooks",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:figureExplorer.figures",
+    "onCommand:figure-explorer.scanNotebook",
+    "onNotebook:jupyter-notebook"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "resources/icon.png",
+  "files": [
+    "dist/**",
+    "resources/**",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "figure-explorer.scanNotebook",
+        "title": "Clio: Scan Notebook"
+      },
+      {
+        "command": "figure-explorer.openFigure",
+        "title": "Clio: Open Figure"
+      },
+      {
+        "command": "figure-explorer.openNotebookGallery",
+        "title": "Clio: Open Gallery"
+      },
+      {
+        "command": "figure-explorer.openFigureGallery",
+        "title": "Clio: Open Figure"
+      },
+      {
+        "command": "figure-explorer.revealFigureCell",
+        "title": "Clio: Reveal Cell"
+      },
+      {
+        "command": "figure-explorer.saveFigureAsPng",
+        "title": "Clio: Save PNG"
+      },
+      {
+        "command": "figure-explorer.exportFigureAsPdf",
+        "title": "Clio: Export PDF"
+      },
+      {
+        "command": "figure-explorer.openGalleryInEditor",
+        "title": "Clio: Open Gallery in Editor"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "figure-explorer.openFigureGallery",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.openFigure",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.openNotebookGallery",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.revealFigureCell",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.saveFigureAsPng",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.exportFigureAsPdf",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "figure-explorer.revealFigureCell",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.figure",
+          "group": "navigation@1"
+        },
+        {
+          "command": "figure-explorer.saveFigureAsPng",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.figure",
+          "group": "navigation@2"
+        },
+        {
+          "command": "figure-explorer.exportFigureAsPdf",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.figure",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "figureExplorer",
+          "title": "Clio",
+          "icon": "resources/Icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "figureExplorer.figures",
+          "name": "Clio",
+          "icon": "resources/Icon.svg"
+        }
+      ],
+      "figureExplorer": [
+        {
+          "id": "figureExplorer.gallery",
+          "name": "Clio Gallery",
+          "type": "webview",
+          "icon": "resources/Icon.svg"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "@types/vscode": "^1.74.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

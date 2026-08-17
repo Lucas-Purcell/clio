@@ -1,0 +1,48 @@
+{
+  "name": "@clio/jupyter",
+  "version": "0.1.14",
+  "description": "Clio: browse PNG figures generated in Jupyter notebooks.",
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "figures"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lucas-Purcell/clio"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "style": "style/index.css",
+  "files": [
+    "lib/**/*",
+    "style/**/*",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:labextension": "jupyter-builder build",
+    "watch": "tsc -w -p tsconfig.json",
+    "check-types": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@clio/shared": "file:../shared",
+    "@jupyterlab/application": "^4.6.0",
+    "@jupyterlab/apputils": "^4.6.0",
+    "@jupyterlab/notebook": "^4.6.0",
+    "@jupyterlab/ui-components": "^4.6.0",
+    "@lumino/widgets": "^2.7.0",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "@jupyter/builder": "^1.0.0",
+    "typescript": "^5.9.0"
+  },
+  "jupyterlab": {
+    "extension": true
+  }
+}
