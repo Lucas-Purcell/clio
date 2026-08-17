@@ -15,6 +15,7 @@ import {
 
 const refreshDelayMs = 150;
 let outputChannel: vscode.OutputChannel | undefined;
+let lastNotebookEditorColumn: vscode.ViewColumn | undefined;
 
 function log(message: string, ...values: unknown[]): void {
     const suffix = values.length
@@ -46,7 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     const provider = new FigureTreeProvider();
     const gallery = new FigureGalleryViewProvider((figure: FigureRecord) => {
-        void revealNotebookCell(figure, gallery.getEditorColumn());
+        void revealNotebookCell(figure);
     });
 
     const treeView = vscode.window.createTreeView("figureExplorer.figures", {
@@ -136,6 +137,8 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
         }
 
+        lastNotebookEditorColumn = editor.viewColumn;
+
         const notebookUri = document.uri.toString();
         const registeredNotebook = figureRegistry.getNotebook(notebookUri);
 
@@ -181,7 +184,7 @@ export function activate(context: vscode.ExtensionContext): void {
                     return;
                 }
 
-                void revealNotebookCell(item.figure, gallery.getEditorColumn());
+                void revealNotebookCell(item.figure);
             }
         ),
         vscode.commands.registerCommand(
@@ -265,8 +268,7 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 async function revealNotebookCell(
-    figure: FigureRecord,
-    preferredColumn?: vscode.ViewColumn
+    figure: FigureRecord
 ): Promise<void> {
     if (!figure.notebookUri) {
         void vscode.window.showWarningMessage(
@@ -287,7 +289,6 @@ async function revealNotebookCell(
         log("REVEAL REQUEST", {
             notebookUri: figure.notebookUri,
             cellIndex: figure.cellIndex,
-            preferredColumn,
             activeNotebookUri:
                 vscode.window.activeNotebookEditor?.notebook.uri.toString(),
             visibleEditors,
@@ -313,15 +314,15 @@ async function revealNotebookCell(
 
         const notebookColumn =
             existingEditor?.viewColumn ??
-            preferredColumn ??
             fallbackEditor?.viewColumn ??
-            vscode.window.activeTextEditor?.viewColumn ??
+            lastNotebookEditorColumn ??
             vscode.ViewColumn.One;
 
         log("REVEAL TARGET", {
             documentUri: document.uri.toString(),
             existingEditorColumn: existingEditor?.viewColumn,
             fallbackNotebookEditorColumn: fallbackEditor?.viewColumn,
+            lastNotebookEditorColumn,
             chosenColumn: notebookColumn,
         });
 

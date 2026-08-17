@@ -1,6 +1,6 @@
 {
   "name": "@clio/jupyter",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Clio: browse PNG figures generated in Jupyter notebooks.",
   "keywords": [
     "jupyter",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clio-jupyter"
-version = "0.1.15"
+version = "0.1.16"
 description = "Clio: browse figures generated in Jupyter notebooks from JupyterLab."
 readme = "README.md"
 requires-python = ">=3.9"

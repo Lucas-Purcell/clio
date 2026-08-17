@@ -2,6 +2,13 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.16] - 2026-08-17
+
+### Fixed
+
+- Minor gallery bug fixes, including fixed-size sparse thumbnails and stacked comparison cards.
+- Reveal Cell from a detached gallery now opens in a notebook editor column instead of the gallery window.
+
 ## [0.1.15] - 2026-08-17
 
 ### Changed
@@ -12,6 +19,7 @@ All notable changes to Clio for VS Code are documented in this file.
 - Removed external-gallery viewport caps so previews and comparisons use the full available window height.
 - Fixed stacked comparison cards overlapping when three or four figures are selected.
 - Kept sparse-gallery thumbnails at the same fixed card size as fuller galleries.
+- Routed Reveal Cell from a detached gallery back to notebook editor columns instead of the gallery window.
 - Updated the add-tag control with the shared Clio tag icon.
 
 ## [0.1.14] - 2026-08-17

@@ -2,6 +2,12 @@
 
 All notable changes to the published Clio JupyterLab package are documented here.
 
+## [0.1.16] - 2026-08-17
+
+### Fixed
+
+- Minor gallery bug fixes, including fixed-size sparse thumbnails and stable stacked comparison cards.
+
 ## [0.1.15] - 2026-08-17
 
 ### Changed

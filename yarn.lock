@@ -46,9 +46,9 @@ __metadata:
   linkType: soft
 
 "@clio/shared@file:../shared::locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab":
-  version: 0.1.15
-  resolution: "@clio/shared@file:../shared#../shared::hash=4d9e16&locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab"
-  checksum: 10/40aef4ae961e1aeefddbde6182b4625709358b5265de8d4aefb0e6f2e582529032f4bb6c763bb28f6cc313e5a25f3aeddd524eef578af14a9b6d8021c4656733
+  version: 0.1.16
+  resolution: "@clio/shared@file:../shared#../shared::hash=2a289b&locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab"
+  checksum: 10/92b381024fbc4cec84210a4b380388130b80a7cd99785a8b56e2629e9672ddcdaff197e917aeedec401df57257dab1a8793b89be0da86e7382e04938c401f5c0
   languageName: node
   linkType: hard
 
