@@ -2,6 +2,12 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.15] - 2026-08-17
+
+### Changed
+
+- Updated the public repository and package metadata for Clio.
+
 ## [0.1.14] - 2026-08-17
 
 ### Added

@@ -38,6 +38,7 @@ __metadata:
     "@jupyterlab/application": "npm:^4.6.0"
     "@jupyterlab/apputils": "npm:^4.6.0"
     "@jupyterlab/notebook": "npm:^4.6.0"
+    "@jupyterlab/ui-components": "npm:^4.6.0"
     "@lumino/widgets": "npm:^2.7.0"
     pdf-lib: "npm:^1.17.1"
     typescript: "npm:^5.9.0"
@@ -45,9 +46,9 @@ __metadata:
   linkType: soft
 
 "@clio/shared@file:../shared::locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab":
-  version: 0.1.14
-  resolution: "@clio/shared@file:../shared#../shared::hash=a88e69&locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab"
-  checksum: 10/984d79b2d42ee9d25375bba86f1ae8b481d7bc5e2e594f8be355b66720185a97dd7d51c94e80bd35ae01f2148a108b43450574c96ad4917517b853e208c8e1fc
+  version: 0.1.15
+  resolution: "@clio/shared@file:../shared#../shared::hash=4d9e16&locator=%40clio%2Fjupyter%40workspace%3Ajupyterlab"
+  checksum: 10/40aef4ae961e1aeefddbde6182b4625709358b5265de8d4aefb0e6f2e582529032f4bb6c763bb28f6cc313e5a25f3aeddd524eef578af14a9b6d8021c4656733
   languageName: node
   linkType: hard
 
@@ -1280,7 +1281,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jupyterlab/ui-components@npm:^4.6.3":
+"@jupyterlab/ui-components@npm:^4.6.0, @jupyterlab/ui-components@npm:^4.6.3":
   version: 4.6.3
   resolution: "@jupyterlab/ui-components@npm:4.6.3"
   dependencies:
