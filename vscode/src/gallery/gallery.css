@@ -516,6 +516,9 @@ h1 {
 .thumbnails {
     display: grid;
     grid-template-columns: repeat(auto-fill, 88px);
+    grid-auto-rows: max-content;
+    align-content: start;
+    align-items: start;
     gap: 7px;
     max-height: none;
     min-height: 0;
@@ -527,6 +530,7 @@ h1 {
 }
 
 .thumbnail {
+    align-self: start;
     min-width: 0;
     padding: 4px;
     border: 1px solid transparent;

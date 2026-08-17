@@ -341,6 +341,7 @@
   grid-template-columns: repeat(auto-fill, minmax(min(92px, 100%), 92px));
   grid-auto-rows: max-content;
   align-content: start;
+  align-items: start;
   justify-content: start;
   gap: 10px;
   min-height: 0;
@@ -538,6 +539,7 @@
 
 .jp-FigureExplorer-card {
   display: block;
+  align-self: start;
   padding: 4px;
   overflow: hidden;
   border: 1px solid transparent;
