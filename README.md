@@ -29,6 +29,13 @@ pip install clio-jupyter
 
 Restart JupyterLab after installation.
 
+## Tutorial notebooks
+
+The self-contained [tutorial notebooks](examples/README.md) demonstrate the
+complete Clio workflow in either host: quick discovery, metadata and search,
+then comparison and export. They use NumPy and Matplotlib; open them, run all
+cells, and use Clio to explore the generated figures.
+
 ## Development
 
 This monorepo contains platform-independent logic in `shared/`, the VS Code extension in `vscode/`, and the JupyterLab extension in `jupyterlab/`. See the platform-specific READMEs for development and release details.
