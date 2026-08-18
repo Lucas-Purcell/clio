@@ -2,6 +2,12 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.17] - 2026-08-18
+
+### Fixed
+
+- Restored preview rendering after margin trimming by permitting Clio's local generated preview images in the VS Code webview security policy.
+
 ## [0.1.16] - 2026-08-17
 
 ### Fixed

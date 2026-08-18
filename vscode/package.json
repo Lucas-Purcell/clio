@@ -2,7 +2,7 @@
   "name": "clio-figure-explorer",
   "displayName": "Clio – Figure Explorer",
   "description": "Clio: browse figures generated in Jupyter notebooks.",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "publisher": "LPurcell",
   "license": "MIT",
   "repository": {
