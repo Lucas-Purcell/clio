@@ -2,6 +2,13 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.18] - 2026-08-18
+
+### Fixed
+
+- Preserved complete notebook figures in gallery previews by removing automatic image cropping that could cut off axis labels, legends, ticks, and annotations.
+- Updated the VS Code Marketplace icon with the new Clio logo.
+
 ## [0.1.17] - 2026-08-18
 
 ### Fixed

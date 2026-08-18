@@ -9,7 +9,7 @@ Install **Clio – Figure Explorer** from the VS Code Marketplace, then open a J
 To install a downloaded release manually, run:
 
 ```bash
-code --install-extension clio-figure-explorer-0.1.17.vsix
+code --install-extension clio-figure-explorer-0.1.18.vsix
 ```
 
 ## Features

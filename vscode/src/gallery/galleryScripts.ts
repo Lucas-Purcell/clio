@@ -92,11 +92,7 @@ let comparisonMode = false;
 const previewImages =
     new Map<string, string>();
 
-const previewVersions =
-    new Map<string, string>();
 
-const previewCropUrls =
-    new Map<string, { url: string; version: string }>();
 
 let pendingCopyKey: string | undefined;
 
@@ -298,20 +294,6 @@ window.addEventListener(
                 imageData
             );
 
-            const previousVersion = previewVersions.get(message.key);
-            if (previousVersion && previousVersion !== message.version) {
-                const cropped = previewCropUrls.get(message.key);
-                if (cropped) {
-                    URL.revokeObjectURL(cropped.url);
-                    previewCropUrls.delete(message.key);
-                }
-            }
-
-            previewVersions.set(
-                message.key,
-                message.version
-            );
-
             if (pendingCopyKey === message.key) {
                 pendingCopyKey = undefined;
 
@@ -346,13 +328,9 @@ window.addEventListener(
 
                 clampPreviewPan();
                 applyPreviewTransform();
-                void trimPreviewMargins(message.key, message.version, img);
             };
 
-            const cropped = previewCropUrls.get(message.key);
-            img.src = cropped?.version === message.version
-                ? cropped.url
-                : "data:" + message.mimeType + ";base64," + message.data;
+            img.src = imageData;
 
             return;
         }
@@ -1747,122 +1725,6 @@ function applyPreviewTransform(): void {
         "zoomed",
         previewZoom > 1.001
     );
-}
-
-/**
- * Trim a uniform outer PNG canvas for the on-screen preview only. The original
- * image data remains in previewImages, so copying, downloading, and exporting
- * preserve the source figure exactly as produced by the notebook.
- */
-async function trimPreviewMargins(
-    key: string,
-    version: string,
-    image: HTMLImageElement
-): Promise<void> {
-    if (previewCropUrls.get(key)?.version === version ||
-        image.naturalWidth < 16 || image.naturalHeight < 16) {
-        return;
-    }
-
-    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-    const sampleScale = Math.min(1, 1024 / longestSide);
-    const sampleWidth = Math.max(1, Math.round(image.naturalWidth * sampleScale));
-    const sampleHeight = Math.max(1, Math.round(image.naturalHeight * sampleScale));
-    const sample = document.createElement("canvas");
-    sample.width = sampleWidth;
-    sample.height = sampleHeight;
-    const context = sample.getContext("2d", { willReadFrequently: true });
-    if (!context) {
-        return;
-    }
-
-    context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
-    const pixels = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
-    const colorAt = (x: number, y: number): [number, number, number] => {
-        const offset = (y * sampleWidth + x) * 4;
-        return [pixels[offset], pixels[offset + 1], pixels[offset + 2]];
-    };
-    const corners = [
-        colorAt(0, 0),
-        colorAt(sampleWidth - 1, 0),
-        colorAt(0, sampleHeight - 1),
-        colorAt(sampleWidth - 1, sampleHeight - 1),
-    ];
-    const background = [0, 1, 2].map((channel) =>
-        Math.round(corners.reduce((total, color) => total + color[channel], 0) / corners.length)
-    );
-
-    let left = sampleWidth;
-    let top = sampleHeight;
-    let right = -1;
-    let bottom = -1;
-    for (let y = 0; y < sampleHeight; y += 1) {
-        for (let x = 0; x < sampleWidth; x += 1) {
-            const offset = (y * sampleWidth + x) * 4;
-            const alpha = pixels[offset + 3];
-            const distance = Math.abs(pixels[offset] - background[0]) +
-                Math.abs(pixels[offset + 1] - background[1]) +
-                Math.abs(pixels[offset + 2] - background[2]);
-            if (alpha < 20 || distance < 42) {
-                continue;
-            }
-            left = Math.min(left, x);
-            top = Math.min(top, y);
-            right = Math.max(right, x);
-            bottom = Math.max(bottom, y);
-        }
-    }
-
-    if (right < left || bottom < top) {
-        return;
-    }
-
-    const safetyPadding = 8;
-    left = Math.max(0, left - safetyPadding);
-    top = Math.max(0, top - safetyPadding);
-    right = Math.min(sampleWidth - 1, right + safetyPadding);
-    bottom = Math.min(sampleHeight - 1, bottom + safetyPadding);
-    const cropWidth = right - left + 1;
-    const cropHeight = bottom - top + 1;
-    const removedFraction = 1 - (cropWidth * cropHeight) / (sampleWidth * sampleHeight);
-    if (removedFraction < 0.08) {
-        return;
-    }
-
-    const sourceX = Math.floor(left / sampleScale);
-    const sourceY = Math.floor(top / sampleScale);
-    const sourceWidth = Math.min(image.naturalWidth - sourceX, Math.ceil(cropWidth / sampleScale));
-    const sourceHeight = Math.min(image.naturalHeight - sourceY, Math.ceil(cropHeight / sampleScale));
-    const croppedCanvas = document.createElement("canvas");
-    croppedCanvas.width = sourceWidth;
-    croppedCanvas.height = sourceHeight;
-    const croppedContext = croppedCanvas.getContext("2d");
-    if (!croppedContext) {
-        return;
-    }
-    croppedContext.drawImage(
-        image,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        sourceWidth,
-        sourceHeight
-    );
-    const blob = await new Promise<Blob | null>((resolve) =>
-        croppedCanvas.toBlob(resolve, "image/png")
-    );
-    if (!blob) {
-        return;
-    }
-    const url = URL.createObjectURL(blob);
-    previewCropUrls.set(key, { url, version });
-
-    if (selectedKey === key && image.isConnected) {
-        image.src = url;
-    }
 }
 
 function clampPreviewPan(): void {
