@@ -22,6 +22,11 @@ interface OutputJson {
     data?: Record<string, string | string[]>;
 }
 
+export interface FigureImageInput {
+    id: string;
+    data: string;
+}
+
 /**
  * Convert Jupyter's serializable notebook model into shared FigureRecords.
  * The JupyterLab adapter deliberately works with nbformat JSON, avoiding
@@ -68,6 +73,43 @@ export function scanNotebookJson(
     }
 
     return figures;
+}
+
+/**
+ * Return the raw PNG output values without decoding them. This lets the
+ * JupyterLab adapter ignore ordinary source edits and only rescan when a
+ * notebook figure has actually changed.
+ */
+export function figureImageInputs(notebook: NotebookJson): FigureImageInput[] {
+    const inputs: FigureImageInput[] = [];
+
+    for (const [cellIndex, cell] of (notebook.cells ?? []).entries()) {
+        for (const [outputIndex, output] of (cell.outputs ?? []).entries()) {
+            const image = output.data?.[pngMimeType];
+
+            if (image) {
+                inputs.push({
+                    id: `${cellIndex}:${outputIndex}`,
+                    data: Array.isArray(image) ? image.join("") : image,
+                });
+            }
+        }
+    }
+
+    return inputs;
+}
+
+export function sameFigureImageInputs(
+    left: readonly FigureImageInput[] | undefined,
+    right: readonly FigureImageInput[]
+): boolean {
+    if (!left || left.length !== right.length) {
+        return false;
+    }
+
+    return left.every((input, index) =>
+        input.id === right[index]?.id && input.data === right[index]?.data
+    );
 }
 
 export function notebookJson(model: { toJSON(): unknown }): NotebookJson {

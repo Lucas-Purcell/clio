@@ -14,7 +14,13 @@ import {
 import { FigureExplorerSidebar } from "./figureExplorerSidebar";
 import { FigureExplorerWidget } from "./figureExplorerWidget";
 import { clioIcon } from "./icon";
-import { notebookJson, scanNotebookJson } from "./notebookScanner";
+import {
+    figureImageInputs,
+    notebookJson,
+    sameFigureImageInputs,
+    scanNotebookJson,
+    type FigureImageInput,
+} from "./notebookScanner";
 import "../style/index.css";
 
 const openGalleryCommand = "figure-explorer:open-gallery";
@@ -108,6 +114,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         let gallery: MainAreaWidget<FigureExplorerWidget> | undefined;
         let sideGallery: FigureExplorerWidget | undefined;
         let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+        const notebookImageInputs = new Map<string, readonly FigureImageInput[]>();
         let galleryWindowChannel: BroadcastChannel | undefined;
         let externalGalleryWindow: Window | null | undefined;
         let externalGalleryConnected = false;
@@ -154,16 +161,25 @@ const plugin: JupyterFrontEndPlugin<void> = {
                 .scrollToItem?.(figure.cellIndex);
         };
 
-        const scanNotebook = (panel: NotebookPanel): void => {
+        const scanNotebook = (panel: NotebookPanel, force = false): boolean => {
             const notebookUri = panel.context.path;
             const notebookName = notebookUri.split("/").pop() ?? notebookUri;
+            const notebook = notebookJson(panel.context.model);
+            const inputs = figureImageInputs(notebook);
+
+            if (!force && sameFigureImageInputs(notebookImageInputs.get(notebookUri), inputs)) {
+                return false;
+            }
+
             const figures = scanNotebookJson(
-                notebookJson(panel.context.model),
+                notebook,
                 notebookUri,
                 notebookName
             );
 
             figureRegistry.setNotebook(notebookUri, notebookName, figures);
+            notebookImageInputs.set(notebookUri, inputs);
+            return true;
         };
 
         const scanOpenNotebooks = (): void => {
@@ -217,11 +233,11 @@ const plugin: JupyterFrontEndPlugin<void> = {
             sendGalleryWindowCatalog(current);
         };
 
-        const refreshGallery = (): void => {
+        const refreshGallery = (force = false): void => {
             const current = getActiveNotebook();
 
             if (current) {
-                scanNotebook(current);
+                scanNotebook(current, force);
             }
 
             updateViews(current);
@@ -234,10 +250,15 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
             refreshTimer = setTimeout(() => {
                 refreshTimer = undefined;
+                let changed = false;
+
                 if (changedPanel && !changedPanel.isDisposed) {
-                    scanNotebook(changedPanel);
+                    changed = scanNotebook(changedPanel);
                 }
-                refreshGallery();
+
+                if (changed) {
+                    updateViews();
+                }
             }, 150);
         };
 
@@ -247,7 +268,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
             panel.context.model.contentChanged.connect(() => scheduleRefresh(panel));
             panel.disposed.connect(() => {
                 figureRegistry.removeNotebook(panel.context.path);
-                scheduleRefresh();
+                notebookImageInputs.delete(panel.context.path);
+                updateViews();
             });
         };
 

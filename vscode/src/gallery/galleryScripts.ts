@@ -9,7 +9,6 @@ interface GalleryFigure {
     cellIndex: number;
     mimeType: string;
     codeSnippet: string;
-    cellSource: string;
     searchText: string;
     version: string;
 }
@@ -28,6 +27,7 @@ interface GalleryThumbnailMessage {
     key: string;
     mimeType: string;
     data: string;
+    version: string;
 }
 
 interface GalleryPreviewMessage {
@@ -91,6 +91,12 @@ let comparisonMode = false;
 
 const previewImages =
     new Map<string, string>();
+
+const MAX_CONCURRENT_THUMBNAIL_LOADS = 4;
+const MAX_THUMBNAIL_SIDE = 320;
+const queuedThumbnails = new Map<string, HTMLImageElement>();
+const loadingThumbnailKeys = new Set<string>();
+const thumbnailUrls = new Map<string, { url: string; version: string }>();
 
 
 
@@ -237,10 +243,7 @@ const thumbnailObserver =
                     return;
                 }
 
-                vscode.postMessage({
-                    type: "requestThumbnail",
-                    key,
-                });
+                queueThumbnailLoad(key, img);
 
                 thumbnailObserver.unobserve(img);
             });
@@ -268,16 +271,17 @@ window.addEventListener(
                 );
 
             if (!img) {
+                finishThumbnailLoad(message.key);
                 return;
             }
 
-            img.src =
-                "data:" +
-                message.mimeType +
-                ";base64," +
-                message.data;
-
-            img.dataset.loaded = "1";
+            void setThumbnailImage(
+                img,
+                message.key,
+                message.mimeType,
+                message.data,
+                message.version
+            );
 
             return;
         }
@@ -339,12 +343,21 @@ window.addEventListener(
             return;
         }
 
-        console.log(
-            "GALLERY setCatalog:",
-            message.figures.length,
-            message.scope,
-            message.notebookName
+        pruneThumbnailUrls(message.figures);
+
+        const previousVersions = new Map(
+            catalog.map((figure) => [figure.key, figure.version])
         );
+
+        const nextVersions = new Map(
+            message.figures.map((figure) => [figure.key, figure.version])
+        );
+
+        for (const [key] of previewImages) {
+            if (previousVersions.get(key) !== nextVersions.get(key)) {
+                previewImages.delete(key);
+            }
+        }
 
         catalog = message.figures;
         selectedKey = message.selectedKey;
@@ -354,11 +367,6 @@ window.addEventListener(
             scope === "all"
                 ? "All open notebooks"
                 : message.notebookName || "Clio";
-
-        console.log(
-            "GALLERY catalog after assignment:",
-            catalog.length
-        );
 
         render();
     }
@@ -613,6 +621,106 @@ function removeTagFilter(tag: string): void {
     renderTagPanel();
     updateSearchUI();
     render();
+}
+
+function queueThumbnailLoad(key: string, image: HTMLImageElement): void {
+    if (image.dataset.loaded === "1" || loadingThumbnailKeys.has(key) || queuedThumbnails.has(key)) {
+        return;
+    }
+
+    queuedThumbnails.set(key, image);
+    pumpThumbnailQueue();
+}
+
+function pumpThumbnailQueue(): void {
+    while (loadingThumbnailKeys.size < MAX_CONCURRENT_THUMBNAIL_LOADS && queuedThumbnails.size > 0) {
+        const next = queuedThumbnails.entries().next().value as [string, HTMLImageElement] | undefined;
+
+        if (!next) {
+            return;
+        }
+
+        const [key, image] = next;
+        queuedThumbnails.delete(key);
+
+        if (!image.isConnected || image.dataset.loaded === "1") {
+            continue;
+        }
+
+        loadingThumbnailKeys.add(key);
+        vscode.postMessage({ type: "requestThumbnail", key });
+    }
+}
+
+function finishThumbnailLoad(key: string): void {
+    loadingThumbnailKeys.delete(key);
+    pumpThumbnailQueue();
+}
+
+async function setThumbnailImage(
+    image: HTMLImageElement,
+    key: string,
+    mimeType: string,
+    data: string,
+    version: string
+): Promise<void> {
+    if (image.dataset.figureVersion !== version) {
+        finishThumbnailLoad(key);
+        return;
+    }
+
+    const source = `data:${mimeType};base64,${data}`;
+
+    try {
+        const sourceBlob = await (await fetch(source)).blob();
+        const bitmap = await createImageBitmap(sourceBlob);
+        const scale = Math.min(1, MAX_THUMBNAIL_SIDE / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+
+        const thumbnailBlob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/png")
+        );
+
+        if (!thumbnailBlob || image.dataset.figureVersion !== version) {
+            finishThumbnailLoad(key);
+            return;
+        }
+
+        const existing = thumbnailUrls.get(key);
+        if (existing) {
+            URL.revokeObjectURL(existing.url);
+        }
+
+        const url = URL.createObjectURL(thumbnailBlob);
+        thumbnailUrls.set(key, { url, version });
+        applyThumbnailSource(image, key, url);
+    } catch {
+        applyThumbnailSource(image, key, source);
+    }
+}
+
+function applyThumbnailSource(image: HTMLImageElement, key: string, source: string): void {
+    image.onload = () => {
+        image.dataset.loaded = "1";
+        finishThumbnailLoad(key);
+    };
+    image.onerror = () => finishThumbnailLoad(key);
+    image.src = source;
+}
+
+function pruneThumbnailUrls(figures: readonly GalleryFigure[]): void {
+    const versions = new Map(figures.map((figure) => [figure.key, figure.version]));
+
+    for (const [key, cached] of thumbnailUrls) {
+        if (versions.get(key) !== cached.version) {
+            URL.revokeObjectURL(cached.url);
+            thumbnailUrls.delete(key);
+        }
+    }
 }
 
 /* ─────────────────────────────────────────────
@@ -888,6 +996,8 @@ function renderComparison(): void {
         exitComparisonMode();
         return;
     }
+
+    requestComparisonImages();
 
     source.innerHTML = "";
 
@@ -2052,6 +2162,8 @@ function updatePreview(): void {
 
     const existingFigureKey =
         preview.dataset.figureKey;
+    const existingFigureVersion =
+        preview.dataset.figureVersion;
 
     /*
      * If the same figure is still selected,
@@ -2062,6 +2174,7 @@ function updatePreview(): void {
      */
     if (
         existingFigureKey === selected.key &&
+        existingFigureVersion === selected.version &&
         existingImage
     ) {
         updatePreviewMetadata(selected);
@@ -2074,6 +2187,7 @@ function updatePreview(): void {
     }
 
     preview.dataset.figureKey = selected.key;
+    preview.dataset.figureVersion = selected.version;
 
     const tagHtml =
         tags.length > 0
@@ -2191,20 +2305,9 @@ function updatePreview(): void {
 async function copyFigureToClipboard(
     key: string
 ): Promise<void> {
-    console.log("COPY: started", key);
-
     const imageData = previewImages.get(key);
 
-    console.log(
-        "COPY: image available:",
-        Boolean(imageData)
-    );
-
     if (!imageData) {
-        console.log(
-            "COPY: requesting preview"
-        );
-
         pendingCopyKey = key;
 
         vscode.postMessage({
@@ -2216,56 +2319,20 @@ async function copyFigureToClipboard(
     }
 
     try {
-        console.log("COPY: fetching image");
-
         const response = await fetch(imageData);
 
-        console.log(
-            "COPY: fetch response",
-            response.ok,
-            response.status,
-            response.type
-        );
-
         const blob = await response.blob();
-
-        console.log(
-            "COPY: blob",
-            blob.type,
-            blob.size
-        );
-
-        console.log(
-            "COPY: clipboard object",
-            Boolean(navigator.clipboard)
-        );
-
-        console.log(
-            "COPY: ClipboardItem",
-            typeof ClipboardItem
-        );
 
         const clipboardItem =
             new ClipboardItem({
                 "image/png": blob,
             });
 
-        console.log(
-            "COPY: ClipboardItem created"
-        );
-
         await navigator.clipboard.write([
             clipboardItem,
         ]);
-
-        console.log(
-            "COPY: clipboard write succeeded"
-        );
-    } catch (error) {
-        console.error(
-            "COPY: FAILED",
-            error
-        );
+    } catch {
+        window.alert("Could not copy the image to the clipboard.");
     }
 }
 
@@ -2407,12 +2474,7 @@ async function copyImageToClipboard(
                 "image/png": clipboardBlob,
             }),
         ]);
-    } catch (error) {
-        console.error(
-            "Failed to copy image to clipboard:",
-            error
-        );
-
+    } catch {
         window.alert(
             "Could not copy the image to the clipboard."
         );
@@ -2490,13 +2552,6 @@ function updatePreviewMetadata(
    ───────────────────────────────────────────── */
 
 function render(): void {
-    console.log(
-        "GALLERY render:",
-        "catalog =", catalog.length,
-        "filtered =", filteredCatalog().length,
-        "selected =", selectedKey
-    );
-
     if (comparisonMode) {
         updateComparisonUI();
         renderComparison();
@@ -2572,10 +2627,6 @@ function render(): void {
 function updateThumbnailElements(
     results: GalleryFigure[]
 ): void {
-    console.log(
-        "GALLERY thumbnails:",
-        results.length
-    );
     const existingButtons =
         new Map<string, HTMLButtonElement>();
 
@@ -2704,11 +2755,6 @@ function updateThumbnailElements(
 
         labelElement.textContent = label;
 
-        console.log(
-            "GALLERY thumbnail label:",
-            label
-        );
-
         /*
          * Preserve the existing image if this figure
          * has not changed.
@@ -2724,7 +2770,13 @@ function updateThumbnailElements(
             img.dataset.loaded = "0";
             img.classList.remove("loaded");
 
-            thumbnailObserver.observe(img);
+            const cached = thumbnailUrls.get(figure.key);
+            if (cached?.version === figure.version) {
+                img.src = cached.url;
+                img.dataset.loaded = "1";
+            } else {
+                thumbnailObserver.observe(img);
+            }
         }
 
         button.classList.toggle(

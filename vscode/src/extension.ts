@@ -13,38 +13,10 @@ import {
     saveFigureAsPng,
 } from "./commands/figureActions";
 
-const refreshDelayMs = 150;
-let outputChannel: vscode.OutputChannel | undefined;
+const refreshDelayMs = 300;
 let lastNotebookEditorColumn: vscode.ViewColumn | undefined;
 
-function log(message: string, ...values: unknown[]): void {
-    const suffix = values.length
-        ? ` ${values.map(formatLogValue).join(" ")}`
-        : "";
-
-    console.debug(`[Clio] ${message}${suffix}`);
-    outputChannel?.appendLine(
-        `[${new Date().toISOString()}] ${message}${suffix}`
-    );
-}
-
-function formatLogValue(value: unknown): string {
-    if (typeof value === "string") {
-        return value;
-    }
-
-    try {
-        return JSON.stringify(value, null, 2);
-    } catch {
-        return String(value);
-    }
-}
-
 export function activate(context: vscode.ExtensionContext): void {
-    outputChannel = vscode.window.createOutputChannel("Clio");
-    context.subscriptions.push(outputChannel);
-    log("CLIO ACTIVATED");
-
     const provider = new FigureTreeProvider();
     const gallery = new FigureGalleryViewProvider((figure: FigureRecord) => {
         void revealNotebookCell(figure);
@@ -86,8 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         try {
             figures = await scanNotebookDocument(document);
-        } catch (error) {
-            log("SCAN FAILED", error);
+        } catch {
             return;
         }
 
@@ -227,7 +198,13 @@ export function activate(context: vscode.ExtensionContext): void {
             }
         }),
         vscode.workspace.onDidChangeNotebookDocument((event) => {
-            scheduleUpdate(event.notebook);
+            const figuresMayHaveChanged =
+                event.contentChanges.length > 0 ||
+                event.cellChanges.some((change) => change.outputs !== undefined);
+
+            if (figuresMayHaveChanged) {
+                scheduleUpdate(event.notebook);
+            }
         }),
         vscode.window.onDidChangeActiveNotebookEditor((editor) => {
             followActiveNotebook(editor);
@@ -279,20 +256,6 @@ async function revealNotebookCell(
 
     try {
         const notebookUri = vscode.Uri.parse(figure.notebookUri);
-        const visibleEditors = vscode.window.visibleNotebookEditors.map(
-            (editor) => ({
-                uri: editor.notebook.uri.toString(),
-                viewColumn: editor.viewColumn,
-            })
-        );
-
-        log("REVEAL REQUEST", {
-            notebookUri: figure.notebookUri,
-            cellIndex: figure.cellIndex,
-            activeNotebookUri:
-                vscode.window.activeNotebookEditor?.notebook.uri.toString(),
-            visibleEditors,
-        });
 
         const document =
             vscode.workspace.notebookDocuments.find(
@@ -318,22 +281,9 @@ async function revealNotebookCell(
             lastNotebookEditorColumn ??
             vscode.ViewColumn.One;
 
-        log("REVEAL TARGET", {
-            documentUri: document.uri.toString(),
-            existingEditorColumn: existingEditor?.viewColumn,
-            fallbackNotebookEditorColumn: fallbackEditor?.viewColumn,
-            lastNotebookEditorColumn,
-            chosenColumn: notebookColumn,
-        });
-
         const editor = await vscode.window.showNotebookDocument(document, {
             viewColumn: notebookColumn,
             preserveFocus: false,
-        });
-
-        log("REVEAL COMPLETE", {
-            documentUri: editor.notebook.uri.toString(),
-            actualColumn: editor.viewColumn,
         });
 
         editor.revealRange(

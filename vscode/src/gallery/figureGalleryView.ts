@@ -35,7 +35,6 @@ interface FigurePayload {
     cellIndex: number;
     mimeType: string;
     codeSnippet: string;
-    cellSource: string;
     searchText: string;
     version: string;
 }
@@ -48,6 +47,8 @@ export class FigureGalleryViewProvider
     private selectedKey: string | undefined;
     private scope: SearchScope = "notebook";
     private readonly disposables: vscode.Disposable[] = [];
+    private viewCatalogSignature: string | undefined;
+    private panelCatalogSignature: string | undefined;
 
     private currentFigures: Array<{
         notebook: NotebookFigures;
@@ -67,6 +68,7 @@ export class FigureGalleryViewProvider
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
+        this.viewCatalogSignature = undefined;
         webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = galleryShellHtml();
 
@@ -79,6 +81,7 @@ export class FigureGalleryViewProvider
         webviewView.onDidDispose(
             () => {
                 this.view = undefined;
+                this.viewCatalogSignature = undefined;
             },
             undefined,
             this.disposables
@@ -103,6 +106,7 @@ export class FigureGalleryViewProvider
                 retainContextWhenHidden: true,
             }
         );
+        this.panelCatalogSignature = undefined;
 
         this.panel.webview.html = galleryShellHtml(true);
 
@@ -115,6 +119,7 @@ export class FigureGalleryViewProvider
         this.panel.onDidDispose(
             () => {
                 this.panel = undefined;
+                this.panelCatalogSignature = undefined;
             },
             undefined,
             this.disposables
@@ -406,7 +411,6 @@ export class FigureGalleryViewProvider
                 cellIndex: figure.cellIndex,
                 mimeType: figure.mimeType,
                 codeSnippet: figure.codeSnippet,
-                cellSource: figure.cellSource,
                 searchText: figure.searchText,
                 version: figure.version,
             })
@@ -421,12 +425,28 @@ export class FigureGalleryViewProvider
             figures,
         };
 
-        if (this.view) {
+        const signature = JSON.stringify({
+            scope: message.scope,
+            selectedKey: message.selectedKey,
+            notebookName: message.notebookName,
+            figures: figures.map((figure) => [
+                figure.key,
+                figure.version,
+                figure.title,
+                figure.tags,
+                figure.codeSnippet,
+                figure.searchText,
+            ]),
+        });
+
+        if (this.view && this.viewCatalogSignature !== signature) {
             void this.view.webview.postMessage(message);
+            this.viewCatalogSignature = signature;
         }
 
-        if (this.panel) {
+        if (this.panel && this.panelCatalogSignature !== signature) {
             void this.panel.webview.postMessage(message);
+            this.panelCatalogSignature = signature;
         }
     }
 }

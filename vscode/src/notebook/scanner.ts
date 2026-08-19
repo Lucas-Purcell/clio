@@ -10,6 +10,7 @@ import {
 import { imageStore } from "../../../shared/registry/imageStore";
 
 const pngMimeType = "image/png";
+const imageVersionCache = new WeakMap<Uint8Array, string>();
 
 export async function scanNotebookDocument(
     notebook: vscode.NotebookDocument
@@ -107,5 +108,13 @@ function fileName(uri: vscode.Uri): string {
 }
 
 function imageVersion(bytes: Uint8Array): string {
-    return createHash("sha1").update(bytes).digest("hex");
+    const cached = imageVersionCache.get(bytes);
+
+    if (cached) {
+        return cached;
+    }
+
+    const version = createHash("sha1").update(bytes).digest("hex");
+    imageVersionCache.set(bytes, version);
+    return version;
 }

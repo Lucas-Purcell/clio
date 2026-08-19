@@ -48,7 +48,28 @@ export class FigureExplorerWidget extends Widget {
     private readonly comparisonCardSizes = new Map<string, number>();
     private readonly activeTags = new Set<string>();
     private readonly objectUrls = new Map<string, { url: string; version: string }>();
+    private readonly thumbnailUrls = new Map<string, { url: string; version: string }>();
     private readonly previewCropUrls = new Map<string, { url: string; version: string }>();
+    private readonly queuedThumbnails = new Map<string, {
+        figure: FigureRecord;
+        image: HTMLImageElement;
+    }>();
+    private activeThumbnailJobs = 0;
+    private readonly thumbnailObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) {
+                continue;
+            }
+
+            const image = entry.target as HTMLImageElement;
+            const figure = this.findFigure(image.dataset.figureId);
+            this.thumbnailObserver.unobserve(image);
+
+            if (figure) {
+                this.queueThumbnail(figure, image);
+            }
+        }
+    }, { threshold: 0.05 });
 
     constructor(
         private readonly onRevealCell: (figure: FigureRecord) => void,
@@ -113,6 +134,7 @@ export class FigureExplorerWidget extends Widget {
     }
 
     dispose(): void {
+        this.thumbnailObserver.disconnect();
         this.revokeObjectUrls();
         super.dispose();
     }
@@ -798,14 +820,14 @@ export class FigureExplorerWidget extends Widget {
 
         const image = document.createElement("img");
         image.alt = figure.title ?? `Figure ${number}`;
-        const cropped = this.previewCropUrls.get(figure.id);
-        image.src = cropped?.version === figure.version
-            ? cropped.url
-            : this.imageUrl(figure);
-        if (!cropped || cropped.version !== figure.version) {
-            image.addEventListener("load", () => {
-                void this.trimPreviewMargins(figure, image);
-            }, { once: true });
+        image.draggable = false;
+        image.dataset.figureId = figure.id;
+        image.dataset.figureVersion = figure.version;
+        const thumbnail = this.thumbnailUrls.get(figure.id);
+        if (thumbnail?.version === figure.version) {
+            image.src = thumbnail.url;
+        } else {
+            this.thumbnailObserver.observe(image);
         }
         card.append(image);
 
@@ -1344,6 +1366,103 @@ export class FigureExplorerWidget extends Widget {
         return `${notebook}-cell-${figure.cellIndex + 1}.${extension}`;
     }
 
+    private findFigure(id: string | undefined): FigureRecord | undefined {
+        return this.notebooks
+            .flatMap((notebook) => notebook.figures)
+            .find((figure) => figure.id === id);
+    }
+
+    private queueThumbnail(figure: FigureRecord, image: HTMLImageElement): void {
+        if (
+            image.dataset.loaded === "1" ||
+            this.queuedThumbnails.has(figure.id) ||
+            this.thumbnailUrls.get(figure.id)?.version === figure.version
+        ) {
+            return;
+        }
+
+        this.queuedThumbnails.set(figure.id, { figure, image });
+        this.pumpThumbnailQueue();
+    }
+
+    private pumpThumbnailQueue(): void {
+        while (this.activeThumbnailJobs < 4 && this.queuedThumbnails.size > 0) {
+            const next = this.queuedThumbnails.entries().next().value as
+                | [string, { figure: FigureRecord; image: HTMLImageElement }]
+                | undefined;
+
+            if (!next) {
+                return;
+            }
+
+            const [id, job] = next;
+            this.queuedThumbnails.delete(id);
+
+            if (!job.image.isConnected) {
+                continue;
+            }
+
+            this.activeThumbnailJobs += 1;
+            void this.createThumbnail(job.figure, job.image);
+        }
+    }
+
+    private async createThumbnail(
+        figure: FigureRecord,
+        image: HTMLImageElement
+    ): Promise<void> {
+        try {
+            const bytes = imageStore.get(figure.id);
+
+            if (!bytes) {
+                return;
+            }
+
+            const bitmap = await createImageBitmap(
+                new Blob([Uint8Array.from(bytes)], { type: figure.mimeType })
+            );
+            const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            bitmap.close();
+
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, "image/png")
+            );
+
+            if (!blob || image.dataset.figureVersion !== figure.version) {
+                return;
+            }
+
+            const previous = this.thumbnailUrls.get(figure.id);
+            if (previous) {
+                URL.revokeObjectURL(previous.url);
+            }
+
+            const url = URL.createObjectURL(blob);
+            this.thumbnailUrls.set(figure.id, { url, version: figure.version });
+
+            if (image.isConnected) {
+                image.onload = () => { image.dataset.loaded = "1"; };
+                image.src = url;
+            }
+        } catch {
+            // Keep a thumbnail failure isolated to this visible card. Browsers
+            // without bitmap/canvas support can still display the original.
+            if (
+                image.isConnected &&
+                image.dataset.figureVersion === figure.version
+            ) {
+                image.src = this.imageUrl(figure);
+            }
+        } finally {
+            this.activeThumbnailJobs -= 1;
+            this.pumpThumbnailQueue();
+        }
+    }
+
     private imageUrl(figure: FigureRecord): string {
         const existing = this.objectUrls.get(figure.id);
         if (existing?.version === figure.version) {
@@ -1524,6 +1643,13 @@ export class FigureExplorerWidget extends Widget {
             }
         }
 
+        for (const [id, cached] of this.thumbnailUrls) {
+            if (figures.get(id)?.version !== cached.version) {
+                URL.revokeObjectURL(cached.url);
+                this.thumbnailUrls.delete(id);
+            }
+        }
+
         for (const [id, cached] of this.previewCropUrls) {
             if (figures.get(id)?.version !== cached.version) {
                 URL.revokeObjectURL(cached.url);
@@ -1537,6 +1663,10 @@ export class FigureExplorerWidget extends Widget {
             URL.revokeObjectURL(url);
         }
         this.objectUrls.clear();
+        for (const { url } of this.thumbnailUrls.values()) {
+            URL.revokeObjectURL(url);
+        }
+        this.thumbnailUrls.clear();
         for (const { url } of this.previewCropUrls.values()) {
             URL.revokeObjectURL(url);
         }

@@ -2,6 +2,17 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.19] - 2026-08-19
+
+### Changed
+
+- Made gallery image loading more responsive for figure-heavy notebooks with bounded, lazy thumbnail generation and smaller cached thumbnails.
+- Avoided gallery rescans and catalog messages when notebook edits do not change figure outputs.
+
+### Fixed
+
+- Refresh the currently selected preview and comparison images immediately when a notebook cell reruns with updated figure output.
+
 ## [0.1.18] - 2026-08-18
 
 ### Fixed
