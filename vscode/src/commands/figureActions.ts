@@ -2,6 +2,10 @@ import * as vscode from "vscode";
 import { PDFDocument } from "pdf-lib";
 import { FigureRecord } from "../../../shared/notebook/types";
 import { imageStore } from "../../../shared/registry/imageStore";
+import {
+    imageExtension,
+    imageFormatLabel,
+} from "../../../shared/notebook/imageFormats";
 
 export async function saveFigureAsPng(
     figure: FigureRecord
@@ -16,10 +20,12 @@ export async function saveFigureAsPng(
         return;
     }
 
+    const extension = imageExtension(figure.mimeType);
+    const format = imageFormatLabel(figure.mimeType);
     const target = await vscode.window.showSaveDialog({
-        defaultUri: defaultUri(figure, "png"),
-        filters: { "PNG image": ["png"] },
-        saveLabel: "Save PNG",
+        defaultUri: defaultUri(figure, extension),
+        filters: { [`${format} image`]: [extension] },
+        saveLabel: "Save Image",
     });
 
     if (!target) {
@@ -29,12 +35,15 @@ export async function saveFigureAsPng(
     await vscode.workspace.fs.writeFile(target, bytes);
 
     vscode.window.showInformationMessage(
-        "Figure saved as PNG."
+        `Figure saved as ${format}.`
     );
 }
 
-/** Opens one native save dialog where the user can choose PNG or PDF. */
-export async function downloadFigure(figure: FigureRecord): Promise<void> {
+/** Opens one native save dialog where the user can choose the source format or PDF. */
+export async function downloadFigure(
+    figure: FigureRecord,
+    rasterizedPng?: Uint8Array
+): Promise<void> {
     const bytes = imageStore.get(figure.id);
 
     if (!bytes) {
@@ -42,10 +51,12 @@ export async function downloadFigure(figure: FigureRecord): Promise<void> {
         return;
     }
 
+    const extension = imageExtension(figure.mimeType);
+    const format = imageFormatLabel(figure.mimeType);
     const target = await vscode.window.showSaveDialog({
-        defaultUri: defaultUri(figure, "png"),
+        defaultUri: defaultUri(figure, extension),
         filters: {
-            "PNG image": ["png"],
+            [`${format} image`]: [extension],
             "PDF document": ["pdf"],
         },
         saveLabel: "Download Figure",
@@ -56,17 +67,21 @@ export async function downloadFigure(figure: FigureRecord): Promise<void> {
     }
 
     if (target.path.toLowerCase().endsWith(".pdf")) {
-        await vscode.workspace.fs.writeFile(target, await createFigurePdf(bytes));
+        await vscode.workspace.fs.writeFile(
+            target,
+            await createFigurePdf(bytes, figure.mimeType, rasterizedPng)
+        );
         vscode.window.showInformationMessage("Figure exported as PDF.");
         return;
     }
 
     await vscode.workspace.fs.writeFile(target, bytes);
-    vscode.window.showInformationMessage("Figure saved as PNG.");
+    vscode.window.showInformationMessage(`Figure saved as ${format}.`);
 }
 
 export async function exportFigureAsPdf(
-    figure: FigureRecord
+    figure: FigureRecord,
+    rasterizedPng?: Uint8Array
 ): Promise<void> {
 
     const bytes = imageStore.get(figure.id);
@@ -89,7 +104,7 @@ export async function exportFigureAsPdf(
     }
 
     const pdfBytes =
-        await createFigurePdf(bytes);
+        await createFigurePdf(bytes, figure.mimeType, rasterizedPng);
 
     await vscode.workspace.fs.writeFile(
         target,
@@ -102,7 +117,7 @@ export async function exportFigureAsPdf(
 }
 
 /* ─────────────────────────────────────────────
-   Bulk PNG export
+   Bulk image export
    ───────────────────────────────────────────── */
 
 export async function saveFiguresAsPng(
@@ -140,7 +155,7 @@ export async function saveFiguresAsPng(
 
         const target = vscode.Uri.joinPath(
             targetFolder,
-            exportFileName(figure, "png")
+            exportFileName(figure, imageExtension(figure.mimeType))
         );
 
         await vscode.workspace.fs.writeFile(
@@ -152,7 +167,7 @@ export async function saveFiguresAsPng(
     }
 
     showBulkResult(
-        "PNG",
+        "image files",
         exported,
         missing
     );
@@ -195,8 +210,13 @@ export async function exportFiguresAsPdf(
             continue;
         }
 
+        if (figure.mimeType !== "image/png" && figure.mimeType !== "image/jpeg") {
+            missing += 1;
+            continue;
+        }
+
         const pdfBytes =
-            await createFigurePdf(bytes);
+            await createFigurePdf(bytes, figure.mimeType);
 
         const target = vscode.Uri.joinPath(
             targetFolder,
@@ -223,16 +243,17 @@ export async function exportFiguresAsPdf(
    ───────────────────────────────────────────── */
 
 async function createFigurePdf(
-    bytes: Uint8Array
+    bytes: Uint8Array,
+    mimeType: string,
+    rasterizedPng?: Uint8Array
 ): Promise<Uint8Array> {
 
     const pdf =
         await PDFDocument.create();
 
-    const image =
-        await pdf.embedPng(
-            Buffer.from(bytes)
-        );
+    const image = mimeType === "image/jpeg" && !rasterizedPng
+        ? await pdf.embedJpg(Buffer.from(bytes))
+        : await pdf.embedPng(Buffer.from(rasterizedPng ?? bytes));
 
     const margin = 36;
 

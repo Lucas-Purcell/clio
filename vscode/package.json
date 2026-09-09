@@ -2,7 +2,7 @@
   "name": "clio-figure-explorer",
   "displayName": "Clio – Figure Explorer",
   "description": "Clio: browse figures generated in Jupyter notebooks.",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "publisher": "LPurcell",
   "license": "MIT",
   "repository": {
@@ -35,6 +35,54 @@
     "workspace"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Clio Gallery",
+      "properties": {
+        "clio.gallery.buttonStyle": {
+          "type": "string",
+          "enum": [
+            "icons",
+            "labels"
+          ],
+          "default": "icons",
+          "enumDescriptions": [
+            "Show compact icon buttons.",
+            "Show icons with text labels where space permits."
+          ],
+          "description": "Choose how Clio Gallery action buttons are displayed."
+        },
+        "clio.gallery.thumbnailSize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "default": "medium",
+          "enumDescriptions": [
+            "68 px thumbnails.",
+            "88 px thumbnails.",
+            "112 px thumbnails."
+          ],
+          "description": "Choose the fixed thumbnail size used by Clio Gallery."
+        },
+        "clio.gallery.compareLayout": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "grid",
+            "stack"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Choose a layout based on the number of figures and available space.",
+            "Always arrange compared figures in a grid.",
+            "Stack compared figures vertically."
+          ],
+          "description": "Choose the default layout for Clio Gallery comparison mode."
+        }
+      }
+    },
     "commands": [
       {
         "command": "figure-explorer.scanNotebook",
@@ -58,7 +106,7 @@
       },
       {
         "command": "figure-explorer.saveFigureAsPng",
-        "title": "Clio: Save PNG"
+        "title": "Clio: Save Image"
       },
       {
         "command": "figure-explorer.exportFigureAsPdf",

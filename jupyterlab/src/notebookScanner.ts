@@ -4,16 +4,17 @@ import {
     figureRecordMetadata,
     imageId,
     imageStore,
+    notebookImageOutput,
+    notebookImageText,
     sourceText,
 } from "@clio/shared";
-
-const pngMimeType = "image/png";
 
 interface NotebookJson {
     cells?: CellJson[];
 }
 
 interface CellJson {
+    id?: string;
     source?: string | string[];
     outputs?: OutputJson[];
 }
@@ -24,7 +25,14 @@ interface OutputJson {
 
 export interface FigureImageInput {
     id: string;
+    mimeType: string;
     data: string;
+}
+
+export interface FigureMetadataInput {
+    cellIndex: number;
+    source: string;
+    signature: string;
 }
 
 /**
@@ -44,28 +52,32 @@ export function scanNotebookJson(
         let figureIndex = 0;
 
         for (const [outputIndex, output] of (cell.outputs ?? []).entries()) {
-            const image = output.data?.[pngMimeType];
+            const image = notebookImageOutput(output.data);
 
             if (!image) {
                 continue;
             }
 
-            const bytes = decodeBase64(
-                Array.isArray(image) ? image.join("") : image
-            );
+            const imageText = notebookImageText(image.value);
+            const bytes = image.mimeType === "image/svg+xml"
+                ? new TextEncoder().encode(imageText)
+                : decodeBase64(imageText);
             const id = imageId(notebookUri, cellIndex, outputIndex, 0);
+            const version = imageVersion(bytes);
 
-            imageStore.put(id, bytes);
+            imageStore.put(id, bytes, version);
 
             figures.push({
                 id,
                 notebookUri,
                 notebookName,
+                ...(cell.id ? { cellId: cell.id } : {}),
                 cellIndex,
                 outputIndex,
                 itemIndex: 0,
-                mimeType: pngMimeType,
-                version: imageVersion(bytes),
+                mimeType: image.mimeType,
+                version,
+                sourceSnapshot: metadata.cellSource,
                 ...figureRecordMetadata(metadata, figureIndex),
             });
             figureIndex += 1;
@@ -76,7 +88,7 @@ export function scanNotebookJson(
 }
 
 /**
- * Return the raw PNG output values without decoding them. This lets the
+ * Return the raw supported image output values without decoding them. This lets the
  * JupyterLab adapter ignore ordinary source edits and only rescan when a
  * notebook figure has actually changed.
  */
@@ -85,12 +97,13 @@ export function figureImageInputs(notebook: NotebookJson): FigureImageInput[] {
 
     for (const [cellIndex, cell] of (notebook.cells ?? []).entries()) {
         for (const [outputIndex, output] of (cell.outputs ?? []).entries()) {
-            const image = output.data?.[pngMimeType];
+            const image = notebookImageOutput(output.data);
 
             if (image) {
                 inputs.push({
                     id: `${cellIndex}:${outputIndex}`,
-                    data: Array.isArray(image) ? image.join("") : image,
+                    mimeType: image.mimeType,
+                    data: notebookImageText(image.value),
                 });
             }
         }
@@ -108,8 +121,94 @@ export function sameFigureImageInputs(
     }
 
     return left.every((input, index) =>
-        input.id === right[index]?.id && input.data === right[index]?.data
+        input.id === right[index]?.id &&
+        input.mimeType === right[index]?.mimeType &&
+        input.data === right[index]?.data
     );
+}
+
+/**
+ * Snapshot only the title/tag portion of each cell. This keeps source edits
+ * cheap while allowing Clio metadata to update without touching image bytes.
+ */
+export function figureMetadataInputs(
+    notebook: NotebookJson
+): FigureMetadataInput[] {
+    return (notebook.cells ?? []).map((cell, cellIndex) => {
+        const source = sourceText(cell.source);
+
+        return {
+            cellIndex,
+            source,
+            signature: metadataSignature(source),
+        };
+    });
+}
+
+export function sameFigureMetadataInputs(
+    left: readonly FigureMetadataInput[] | undefined,
+    right: readonly FigureMetadataInput[]
+): boolean {
+    if (!left || left.length !== right.length) {
+        return false;
+    }
+
+    return left.every((input, index) =>
+        input.cellIndex === right[index]?.cellIndex &&
+        input.signature === right[index]?.signature
+    );
+}
+
+export function updateChangedFigureMetadata(
+    figures: readonly FigureRecord[],
+    previous: readonly FigureMetadataInput[] | undefined,
+    next: readonly FigureMetadataInput[],
+    notebookName: string
+): FigureRecord[] {
+    const previousSignatures = new Map(
+        previous?.map((input) => [input.cellIndex, input.signature]) ?? []
+    );
+
+    return next.reduce(
+        (updated, input) => previousSignatures.get(input.cellIndex) === input.signature
+            ? updated
+            : updateCellMetadata(
+                updated,
+                input.cellIndex,
+                input.source,
+                notebookName
+            ),
+        [...figures]
+    );
+}
+
+function metadataSignature(source: string): string {
+    const metadata = figureMetadata(source, "");
+    return JSON.stringify([metadata.titles, metadata.tags]);
+}
+
+function updateCellMetadata(
+    figures: readonly FigureRecord[],
+    cellIndex: number,
+    source: string,
+    notebookName: string
+): FigureRecord[] {
+    const metadata = figureMetadata(source, notebookName);
+    let figureIndex = 0;
+
+    return figures.map((figure) => {
+        if (figure.cellIndex !== cellIndex) {
+            return figure;
+        }
+
+        const { title: _previousTitle, ...record } = figure;
+        const updated = {
+            ...record,
+            ...figureRecordMetadata(metadata, figureIndex),
+        };
+        figureIndex += 1;
+        return updated;
+    });
 }
 
 export function notebookJson(model: { toJSON(): unknown }): NotebookJson {

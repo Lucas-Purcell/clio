@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { scanNotebookFile } from "../notebook/scanner";
 import { figureRegistry } from "../../../shared/registry/figureRegistry";
+import { figureHistoryStore } from "../../../shared/registry/figureHistoryStore";
+import { imageStore } from "../../../shared/registry/imageStore";
 import { NotebookFigures } from "../../../shared/notebook/types";
 import { FigureTreeProvider } from "../views/figureTreeProvider";
 
@@ -21,10 +23,26 @@ export async function scanNotebookCommand(
     }
 
     try {
+        const notebookUri = uri.toString();
+        const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
+        const previousImages = new Map(
+            previousFigures.flatMap((figure) => {
+                const bytes = imageStore.get(figure.id);
+                return bytes
+                    ? [[figure.id, Uint8Array.from(bytes)] as const]
+                    : [];
+            })
+        );
         const figures = await scanNotebookFile(uri);
 
+        figureHistoryStore.captureChanges(
+            previousFigures,
+            figures,
+            previousImages
+        );
+
         figureRegistry.setNotebook(
-            uri.toString(),
+            notebookUri,
             fileName(uri),
             figures
         );

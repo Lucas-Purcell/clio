@@ -7,10 +7,13 @@ import {
     imageId,
     sourceText,
 } from "../../../shared/notebook/scanner";
+import {
+    isSupportedImageMimeType,
+    notebookImageOutput,
+    notebookImageText,
+    supportedImageMimeTypes,
+} from "../../../shared/notebook/imageFormats";
 import { imageStore } from "../../../shared/registry/imageStore";
-
-const pngMimeType = "image/png";
-const imageVersionCache = new WeakMap<Uint8Array, string>();
 
 export async function scanNotebookDocument(
     notebook: vscode.NotebookDocument
@@ -24,27 +27,36 @@ export async function scanNotebookDocument(
         let figureIndex = 0;
 
         for (const [outputIndex, output] of cell.outputs.entries()) {
-            for (const [itemIndex, item] of output.items.entries()) {
-                if (item.mime !== pngMimeType) {
-                    continue;
-                }
+            const preferredMimeType = supportedImageMimeTypes.find((mimeType) =>
+                output.items.some((item) => item.mime === mimeType)
+            );
+            const itemIndex = preferredMimeType
+                ? output.items.findIndex((item) => item.mime === preferredMimeType)
+                : -1;
+            const item = itemIndex >= 0 ? output.items[itemIndex] : undefined;
 
-                const id = imageId(notebookUri, cellIndex, outputIndex, itemIndex);
-                imageStore.put(id, item.data);
-
-                figures.push({
-                    id,
-                    notebookUri,
-                    notebookName,
-                    cellIndex,
-                    outputIndex,
-                    itemIndex,
-                    mimeType: item.mime,
-                    version: imageVersion(item.data),
-                    ...figureRecordMetadata(metadata, figureIndex),
-                });
-                figureIndex += 1;
+            if (!item || !isSupportedImageMimeType(item.mime)) {
+                continue;
             }
+
+            const id = imageId(notebookUri, cellIndex, outputIndex, itemIndex);
+            const version = imageVersion(item.data);
+            imageStore.put(id, item.data, version);
+
+            figures.push({
+                id,
+                notebookUri,
+                notebookName,
+                cellId: cell.document.uri.toString(),
+                cellIndex,
+                outputIndex,
+                itemIndex,
+                mimeType: item.mime,
+                version,
+                sourceSnapshot: metadata.cellSource,
+                ...figureRecordMetadata(metadata, figureIndex),
+            });
+            figureIndex += 1;
         }
     }
 
@@ -57,6 +69,7 @@ export async function scanNotebookFile(
     const fileBytes = await vscode.workspace.fs.readFile(uri);
     const notebook = JSON.parse(new TextDecoder().decode(fileBytes)) as {
         cells?: Array<{
+            id?: string;
             source?: string | string[];
             outputs?: Array<{ data?: Record<string, string | string[]> }>;
         }>;
@@ -71,29 +84,32 @@ export async function scanNotebookFile(
         let figureIndex = 0;
 
         for (const [outputIndex, output] of (cell.outputs ?? []).entries()) {
-            const image = output.data?.[pngMimeType];
+            const image = notebookImageOutput(output.data);
 
             if (!image) {
                 continue;
             }
 
             const id = imageId(notebookUri, cellIndex, outputIndex, 0);
-            const imageBytes = Buffer.from(
-                Array.isArray(image) ? image.join("") : image,
-                "base64"
-            );
+            const imageText = notebookImageText(image.value);
+            const imageBytes = image.mimeType === "image/svg+xml"
+                ? new TextEncoder().encode(imageText)
+                : Buffer.from(imageText, "base64");
+            const version = imageVersion(imageBytes);
 
-            imageStore.put(id, imageBytes);
+            imageStore.put(id, imageBytes, version);
 
             figures.push({
                 id,
                 notebookUri,
                 notebookName,
+                ...(cell.id ? { cellId: cell.id } : {}),
                 cellIndex,
                 outputIndex,
                 itemIndex: 0,
-                mimeType: pngMimeType,
-                version: imageVersion(imageBytes),
+                mimeType: image.mimeType,
+                version,
+                sourceSnapshot: metadata.cellSource,
                 ...figureRecordMetadata(metadata, figureIndex),
             });
             figureIndex += 1;
@@ -108,13 +124,5 @@ function fileName(uri: vscode.Uri): string {
 }
 
 function imageVersion(bytes: Uint8Array): string {
-    const cached = imageVersionCache.get(bytes);
-
-    if (cached) {
-        return cached;
-    }
-
-    const version = createHash("sha1").update(bytes).digest("hex");
-    imageVersionCache.set(bytes, version);
-    return version;
+    return createHash("sha1").update(bytes).digest("hex");
 }

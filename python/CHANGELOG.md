@@ -2,6 +2,26 @@
 
 All notable changes to the published Clio JupyterLab package are documented here.
 
+## [0.1.17] - 2026-08-26
+
+### Added
+
+- Added Focus Figure to gallery previews and comparison figures in side-panel, tab, and separate-window layouts.
+- Added JPEG, WebP, and SVG discovery, previews, original-format downloads, PDF export, and PNG clipboard conversion alongside PNG figures.
+- Added browser-persistent starred figures with a dedicated Starred gallery scope and retained metadata for figures in closed notebooks.
+- Added session-only figure history across JupyterLab gallery hosts, with version navigation, comparison, copying, and export.
+- Added history-version code viewing, copying, and safe restoration with stable cell targeting and normal notebook Undo support.
+
+### Fixed
+
+- Restored the Tags, Filters, and Settings popup menus across JupyterLab gallery layouts.
+- Restored qualified search and immediate active-notebook synchronization in This notebook mode.
+- Applied save, PDF export, and star/unstar actions to all selected thumbnails.
+- Replaced browser fullscreen requests that embedded hosts may block with a reliable in-gallery focus mode; press Escape to restore the regular gallery.
+- Preserve the previous plot while a rerun temporarily clears its cell output, allowing the replacement plot to expose its session history.
+- Keep history-version thumbnails available while browsing and comparing earlier plots.
+- Preserve Focus Figure while navigating backward or forward through plot history.
+
 ## [0.1.16] - 2026-08-17
 
 ### Fixed

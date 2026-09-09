@@ -9,17 +9,25 @@ interface GalleryFigure {
     cellIndex: number;
     mimeType: string;
     codeSnippet: string;
+    cellSource: string;
     searchText: string;
     version: string;
+    starred: boolean;
+    available: boolean;
+    hasHistory: boolean;
+    historyPosition?: number;
+    historyTotal?: number;
 }
 
 interface GalleryCatalogMessage {
     type: "setCatalog";
     figures: GalleryFigure[];
     selectedKey?: string;
-    scope: "notebook" | "all";
+    scope: "notebook" | "all" | "starred";
     notebookName?: string;
     totalFigures: number;
+    settings?: GallerySettings;
+    historyMode?: boolean;
 }
 
 interface GalleryThumbnailMessage {
@@ -38,30 +46,56 @@ interface GalleryPreviewMessage {
     version: string;
 }
 
+interface GallerySettings {
+    buttonStyle: "icons" | "labels";
+    thumbnailSize: "small" | "medium" | "large";
+    compareLayout: "auto" | "grid" | "stack";
+}
+
+interface GallerySettingsMessage {
+    type: "setSettings";
+    settings: GallerySettings;
+}
+
 type GalleryWebviewMessage =
     | GalleryCatalogMessage
     | GalleryThumbnailMessage
-    | GalleryPreviewMessage;
+    | GalleryPreviewMessage
+    | GallerySettingsMessage;
 
 interface GalleryVsCodeMessage {
     type:
+        | "webviewReady"
         | "requestThumbnail"
         | "requestPreview"
         | "selectFigure"
         | "setScope"
+        | "toggleStar"
+        | "setStars"
+        | "enterHistory"
+        | "exitHistory"
+        | "copyVersionCode"
+        | "restoreVersionCode"
         | "revealCell"
         | "savePNG"
         | "download"
         | "exportPdf"
         | "copyImage"
         | "exportAllPng"
-        | "exportAllPdf";
+        | "exportAllPdf"
+        | "updateSettings";
 
     key?: string;
 
     keys?: string[];
 
-    scope?: "notebook" | "all";
+    scope?: "notebook" | "all" | "starred";
+
+    pngData?: string;
+
+    settings?: GallerySettings;
+
+    starred?: boolean;
 }
 
 interface VsCodeApi {
@@ -78,16 +112,82 @@ const pdfIcon =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6Z"/><path d="M14 2v5h5"/><text x="7" y="16" textLength="10" lengthAdjust="spacingAndGlyphs">PDF</text></svg>';
 const saveIcon =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg>';
+const fullscreenIcon =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>';
+const historyIcon =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/><path d="M5.5 5.5 3 8V3h5"/></svg>';
+
+interface FigureFocusState {
+    viewport: HTMLElement;
+    parent: Node;
+    nextSibling: ChildNode | null;
+    overlay: HTMLDivElement;
+}
+
+let focusedFigure: FigureFocusState | undefined;
+
+function exitFigureFullscreen(): void {
+    if (!focusedFigure) {
+        return;
+    }
+
+    const { viewport, parent, nextSibling, overlay } = focusedFigure;
+    if (nextSibling?.parentNode === parent) {
+        parent.insertBefore(viewport, nextSibling);
+    } else {
+        parent.appendChild(viewport);
+    }
+    overlay.remove();
+    focusedFigure = undefined;
+}
+
+function toggleFigureFullscreen(viewport: HTMLElement): void {
+    if (focusedFigure?.viewport === viewport) {
+        exitFigureFullscreen();
+        return;
+    }
+
+    exitFigureFullscreen();
+    const overlay = document.createElement("div");
+    overlay.className = "figure-focus-overlay";
+    const parent = viewport.parentNode;
+
+    if (!parent) {
+        return;
+    }
+
+    focusedFigure = {
+        viewport,
+        parent,
+        nextSibling: viewport.nextSibling,
+        overlay,
+    };
+    document.body.append(overlay);
+    overlay.append(viewport);
+}
+
+window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && focusedFigure) {
+        event.preventDefault();
+        exitFigureFullscreen();
+    }
+});
 
 let catalog: GalleryFigure[] = [];
 let selectedKey: string | undefined;
-let scope: "notebook" | "all" = "notebook";
+let scope: "notebook" | "all" | "starred" = "notebook";
 let titleFilter: "all" | "titled" | "untitled" = "all";
 let activeTags: string[] = [];
 
 let selectedKeys: string[] = [];
 let selectionAnchorKey: string | undefined;
 let comparisonMode = false;
+let historyMode = false;
+let gallerySettings: GallerySettings = {
+    buttonStyle: "icons",
+    thumbnailSize: "medium",
+    compareLayout: "auto",
+};
 
 const previewImages =
     new Map<string, string>();
@@ -101,6 +201,8 @@ const thumbnailUrls = new Map<string, { url: string; version: string }>();
 
 
 let pendingCopyKey: string | undefined;
+const pendingPdfKeys = new Set<string>();
+const pendingDownloadKeys = new Set<string>();
 
 
 let isGalleryDragging = false;
@@ -185,6 +287,12 @@ const reveal =
 const downloadSelected =
     getElement<HTMLButtonElement>("#download-selected");
 
+const starSelected =
+    getElement<HTMLButtonElement>("#star-selected");
+
+const exitHistory =
+    getElement<HTMLButtonElement>("#exit-history");
+
 const filtersButton =
     getElement<HTMLButtonElement>("#filters-button");
 
@@ -193,6 +301,12 @@ const filterPanel =
 
 const compare =
     getElement<HTMLButtonElement>("#compare");
+
+const settingsButton =
+    getElement<HTMLButtonElement>("#settings-button");
+
+const settingsPanel =
+    getElement<HTMLElement>("#settings-panel");
 
 if (
     !thumbnails ||
@@ -207,7 +321,11 @@ if (
     !source ||
     !reveal ||
     !downloadSelected ||
+    !starSelected ||
+    !exitHistory ||
     !compare ||
+    !settingsButton ||
+    !settingsPanel ||
     !filtersButton ||
     !filterPanel
 ) {
@@ -215,6 +333,125 @@ if (
 }
 
 setupGalleryDragSelection();
+
+function applyGallerySettings(settings: GallerySettings): void {
+    gallerySettings = {
+        buttonStyle: settings.buttonStyle === "labels" ? "labels" : "icons",
+        thumbnailSize:
+            settings.thumbnailSize === "small" || settings.thumbnailSize === "large"
+                ? settings.thumbnailSize
+                : "medium",
+        compareLayout:
+            settings.compareLayout === "grid" || settings.compareLayout === "stack"
+                ? settings.compareLayout
+                : "auto",
+    };
+
+    document.body.classList.toggle(
+        "button-style-labels",
+        gallerySettings.buttonStyle === "labels"
+    );
+    document.body.dataset.thumbnailSize = gallerySettings.thumbnailSize;
+
+    settingsPanel.querySelectorAll<HTMLButtonElement>("[data-setting]")
+        .forEach((button) => {
+            const setting = button.dataset.setting as keyof GallerySettings | undefined;
+            button.classList.toggle(
+                "active",
+                Boolean(setting && button.dataset.value === gallerySettings[setting])
+            );
+        });
+
+    if (comparisonMode) {
+        renderComparison();
+    }
+}
+
+function closeSettings(): void {
+    settingsPanel.hidden = true;
+    settingsButton.setAttribute("aria-expanded", "false");
+}
+
+function positionPopup(popup: HTMLElement, anchor: HTMLElement): void {
+    const margin = 8;
+    const gap = 5;
+    const anchorBounds = anchor.getBoundingClientRect();
+    const availableBelow = window.innerHeight - anchorBounds.bottom - margin - gap;
+    const availableAbove = anchorBounds.top - margin - gap;
+    const openAbove = availableBelow < 96 && availableAbove > availableBelow;
+
+    popup.style.position = "fixed";
+    popup.style.right = "auto";
+    popup.style.maxWidth = `${Math.max(0, window.innerWidth - margin * 2)}px`;
+    popup.style.maxHeight = `${Math.max(0, Math.min(240, openAbove ? availableAbove : availableBelow))}px`;
+    popup.style.left = "0";
+    popup.style.top = "0";
+
+    const popupBounds = popup.getBoundingClientRect();
+    const left = Math.max(
+        margin,
+        Math.min(anchorBounds.left, window.innerWidth - popupBounds.width - margin)
+    );
+    const top = openAbove
+        ? Math.max(margin, anchorBounds.top - popupBounds.height - gap)
+        : Math.min(
+            Math.max(margin, anchorBounds.bottom + gap),
+            window.innerHeight - popupBounds.height - margin
+        );
+
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+}
+
+function positionOpenPopups(): void {
+    if (tagPanel.classList.contains("open")) {
+        positionPopup(tagPanel, addTag);
+    }
+
+    if (filterPanel.classList.contains("open")) {
+        positionPopup(filterPanel, filtersButton);
+    }
+
+    if (!settingsPanel.hidden) {
+        positionPopup(settingsPanel, settingsButton);
+    }
+}
+
+settingsButton.setAttribute("aria-expanded", "false");
+settingsButton.addEventListener("click", () => {
+    const opening = settingsPanel.hidden;
+    settingsPanel.hidden = !opening;
+    settingsButton.setAttribute("aria-expanded", String(opening));
+
+    if (opening) {
+        requestAnimationFrame(() => positionPopup(settingsPanel, settingsButton));
+    }
+});
+
+settingsPanel.querySelectorAll<HTMLButtonElement>("[data-setting]")
+    .forEach((button) => {
+        button.addEventListener("click", () => {
+            const setting = button.dataset.setting as keyof GallerySettings | undefined;
+            const value = button.dataset.value;
+
+            if (!setting || !value) {
+                return;
+            }
+
+            const settings = { ...gallerySettings, [setting]: value } as GallerySettings;
+            applyGallerySettings(settings);
+            vscode.postMessage({ type: "updateSettings", settings });
+        });
+    });
+
+document.addEventListener("pointerdown", (event) => {
+    const target = event.target as Node;
+    if (!settingsPanel.hidden && !settingsPanel.contains(target) && !settingsButton.contains(target)) {
+        closeSettings();
+    }
+});
+
+window.addEventListener("resize", positionOpenPopups);
 
 /* ─────────────────────────────────────────────
    Lazy thumbnail loading
@@ -264,6 +501,11 @@ window.addEventListener(
     (event: MessageEvent<GalleryWebviewMessage>) => {
         const message = event.data;
 
+        if (message.type === "setSettings") {
+            applyGallerySettings(message.settings);
+            return;
+        }
+
         if (message.type === "thumbnail") {
             const img =
                 document.querySelector<HTMLImageElement>(
@@ -307,6 +549,14 @@ window.addEventListener(
                 );
             }
 
+            if (pendingPdfKeys.delete(message.key)) {
+                void postPdfExport(message.key);
+            }
+
+            if (pendingDownloadKeys.delete(message.key)) {
+                void postDownload(message.key);
+            }
+
             if (comparisonMode) {
                 renderComparison();
                 return;
@@ -343,6 +593,10 @@ window.addEventListener(
             return;
         }
 
+        if (message.settings) {
+            applyGallerySettings(message.settings);
+        }
+
         pruneThumbnailUrls(message.figures);
 
         const previousVersions = new Map(
@@ -362,15 +616,26 @@ window.addEventListener(
         catalog = message.figures;
         selectedKey = message.selectedKey;
         scope = message.scope;
+        historyMode = Boolean(message.historyMode);
+        document.body.classList.toggle("history-mode", historyMode);
+        exitHistory.hidden = !historyMode;
 
         title.textContent =
-            scope === "all"
-                ? "All open notebooks"
-                : message.notebookName || "Clio";
+            historyMode
+                ? "Figure history"
+                : scope === "all"
+                    ? "All open notebooks"
+                    : scope === "starred"
+                        ? "Starred figures"
+                        : message.notebookName || "Clio";
 
         render();
     }
 );
+
+// VS Code can discard and recreate a background webview. The extension host
+// retains the figures, but this page's image caches begin empty after revival.
+vscode.postMessage({ type: "webviewReady" });
 
 /* ─────────────────────────────────────────────
    Search
@@ -400,7 +665,8 @@ document
 
             if (
                 buttonScope !== "notebook" &&
-                buttonScope !== "all"
+                buttonScope !== "all" &&
+                buttonScope !== "starred"
             ) {
                 return;
             }
@@ -417,21 +683,7 @@ document
    ───────────────────────────────────────────── */
 
 function positionFilterPanel(): void {
-    filterPanel.classList.remove("open-left");
-
-    const menuBounds = filterPanel.parentElement?.getBoundingClientRect();
-    const panelWidth = filterPanel.getBoundingClientRect().width;
-
-    if (!menuBounds || panelWidth === 0) {
-        return;
-    }
-
-    const spaceOnRight = window.innerWidth - menuBounds.left;
-    const spaceOnLeft = menuBounds.right;
-
-    if (spaceOnRight < panelWidth && spaceOnLeft >= panelWidth) {
-        filterPanel.classList.add("open-left");
-    }
+    positionPopup(filterPanel, filtersButton);
 }
 
 filtersButton.addEventListener("click", (event) => {
@@ -441,7 +693,7 @@ filtersButton.addEventListener("click", (event) => {
     filterPanel.classList.toggle("open", willOpen);
 
     if (willOpen) {
-        positionFilterPanel();
+        requestAnimationFrame(positionFilterPanel);
     } else {
         filterPanel.classList.remove("open-left");
     }
@@ -460,12 +712,6 @@ document.addEventListener("click", (event) => {
     ) {
         filterPanel.classList.remove("open");
         filterPanel.classList.remove("open-left");
-    }
-});
-
-window.addEventListener("resize", () => {
-    if (filterPanel.classList.contains("open")) {
-        positionFilterPanel();
     }
 });
 
@@ -500,7 +746,12 @@ addTag.addEventListener("click", (event) => {
     event.stopPropagation();
 
     renderTagPanel();
-    tagPanel.classList.toggle("open");
+    const willOpen = !tagPanel.classList.contains("open");
+    tagPanel.classList.toggle("open", willOpen);
+
+    if (willOpen) {
+        requestAnimationFrame(() => positionPopup(tagPanel, addTag));
+    }
 });
 
 document.addEventListener("click", (event) => {
@@ -734,9 +985,30 @@ reveal.addEventListener("click", () => {
 });
 
 downloadSelected.addEventListener("click", () => {
-    if (selectedKey) {
-        vscode.postMessage({ type: "download", key: selectedKey });
+    const keys = selectedKeys.filter((key) =>
+        catalog.some((figure) => figure.key === key && figure.available)
+    );
+    if (keys.length > 1) {
+        vscode.postMessage({ type: "exportAllPng", keys });
+    } else if (keys[0]) {
+        void postDownload(keys[0]);
     }
+});
+
+starSelected.addEventListener("click", () => {
+    const figures = catalog.filter((figure) => selectedKeys.includes(figure.key));
+    if (figures.length > 0) {
+        const starred = figures.some((figure) => !figure.starred);
+        vscode.postMessage({
+            type: "setStars",
+            keys: figures.map((figure) => figure.key),
+            starred,
+        });
+    }
+});
+
+exitHistory.addEventListener("click", () => {
+    vscode.postMessage({ type: "exitHistory" });
 });
 
 /* ─────────────────────────────────────────────
@@ -770,6 +1042,46 @@ function selectThumbnail(key: string): void {
 
     if (!comparisonMode) {
         updatePreview();
+    }
+}
+
+function selectHistoryVersion(direction: -1 | 1): void {
+    if (!historyMode || !selectedKey) {
+        return;
+    }
+
+    const index = catalog.findIndex((figure) => figure.key === selectedKey);
+    const next = catalog[Math.max(0, Math.min(catalog.length - 1, index + direction))];
+
+    if (next && next.key !== selectedKey) {
+        const restoreFocusedPreview = Boolean(
+            focusedFigure?.viewport.classList.contains(
+                "preview-image-viewport"
+            )
+        );
+
+        if (restoreFocusedPreview) {
+            // Return the focused viewport to the preview before it is rebuilt.
+            // Otherwise updatePreview cannot find or replace the visible image,
+            // because the current viewport lives under the document overlay.
+            exitFigureFullscreen();
+        }
+
+        selectThumbnail(next.key);
+
+        if (restoreFocusedPreview) {
+            const viewport = preview.querySelector<HTMLElement>(
+                ".preview-image-viewport"
+            );
+
+            if (viewport) {
+                toggleFigureFullscreen(viewport);
+            }
+        }
+
+        thumbnails
+            .querySelector<HTMLElement>(`.thumbnail[data-key="${CSS.escape(next.key)}"]`)
+            ?.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
 }
 
@@ -873,7 +1185,14 @@ function selectFigureRange(key: string): void {
 
 function updateSelectionUI(): void {
     compare.disabled = selectedKeys.length < 2;
-    downloadSelected.disabled = !selectedKey;
+    const selected = catalog.filter((figure) => selectedKeys.includes(figure.key));
+    downloadSelected.disabled = !selected.some((figure) => figure.available);
+    starSelected.disabled = selected.length === 0 || historyMode;
+    const shouldStar = selected.some((figure) => !figure.starred);
+    starSelected.textContent = shouldStar ? "☆" : "★";
+    const starLabel = `${shouldStar ? "Star" : "Unstar"} ${selected.length > 1 ? `${selected.length} figures` : "figure"}`;
+    starSelected.title = starLabel;
+    starSelected.setAttribute("aria-label", starLabel);
     const compareLabel = selectedKeys.length > 0
         ? "Compare " + selectedKeys.length + " selected figures"
         : "Compare selected figures";
@@ -918,7 +1237,14 @@ function renderThumbnailSelection(): void {
 
 function updateComparisonUI(): void {
     compare.disabled = selectedKeys.length < 2;
-    downloadSelected.disabled = !selectedKey;
+    const selected = catalog.filter((figure) => selectedKeys.includes(figure.key));
+    downloadSelected.disabled = !selected.some((figure) => figure.available);
+    starSelected.disabled = selected.length === 0 || historyMode;
+    const shouldStar = selected.some((figure) => !figure.starred);
+    starSelected.textContent = shouldStar ? "☆" : "★";
+    const starLabel = `${shouldStar ? "Star" : "Unstar"} ${selected.length > 1 ? `${selected.length} figures` : "figure"}`;
+    starSelected.title = starLabel;
+    starSelected.setAttribute("aria-label", starLabel);
     const compareLabel = selectedKeys.length > 0
         ? "Compare " + selectedKeys.length + " selected figures"
         : "Compare selected figures";
@@ -981,6 +1307,8 @@ function renderComparison(): void {
         return;
     }
 
+    exitFigureFullscreen();
+
     const figures = selectedKeys
         .map((key) =>
             catalog.find(
@@ -1001,11 +1329,17 @@ function renderComparison(): void {
 
     source.innerHTML = "";
 
-    const comparisonLayout = figures.length === 2
-        ? "comparison-grid--resizable"
-        : figures.length > 4
-            ? "comparison-grid--scrollable"
-            : "comparison-grid--stacked";
+    const comparisonLayout = gallerySettings.compareLayout === "stack"
+        ? "comparison-grid--force-stack"
+        : gallerySettings.compareLayout === "grid"
+            ? "comparison-grid--force-grid"
+            : figures.length === 2
+                ? "comparison-grid--resizable"
+                : figures.length > 4
+                    ? "comparison-grid--scrollable"
+                    : "comparison-grid--stacked";
+    const fullscreenAction =
+        '<button class="comparison-fullscreen-figure icon-button" type="button" title="Focus figure" aria-label="Focus figure">' + fullscreenIcon + "</button>";
 
     preview.innerHTML =
         '<div class="comparison-header">' +
@@ -1020,7 +1354,7 @@ function renderComparison(): void {
             '<div class="comparison-header-actions">' +
 
                 '<button id="export-all-png" type="button">' +
-                    "Save all PNG" +
+                    "Save all images" +
                 "</button>" +
 
                 '<button id="export-all-pdf" type="button">' +
@@ -1067,6 +1401,7 @@ function renderComparison(): void {
                                 '<button class="comparison-action download-figure icon-button" type="button" title="Download figure" aria-label="Download figure" data-key="' +
                                     escapeHtml(figure.key) +
                                     '">' + saveIcon + '</button>' +
+                                fullscreenAction +
                             "</div>" +
                             "</div>"
                         : '<div class="comparison-image-viewport">' +
@@ -1197,10 +1532,23 @@ function renderComparison(): void {
                     return;
                 }
 
-                vscode.postMessage({
-                    type: "download",
-                    key,
-                });
+                void postDownload(key);
+            });
+        });
+
+    preview
+        .querySelectorAll<HTMLButtonElement>(
+            ".comparison-fullscreen-figure"
+        )
+        .forEach((button) => {
+            button.addEventListener("click", () => {
+                const viewport = button.closest<HTMLElement>(
+                    ".comparison-image-viewport"
+                );
+
+                if (viewport) {
+                    toggleFigureFullscreen(viewport);
+                }
             });
         });
 
@@ -1214,12 +1562,7 @@ function renderComparison(): void {
             return;
         }
 
-        selectedKeys.forEach((key) => {
-            vscode.postMessage({
-                type: "savePNG",
-                key,
-            });
-        });
+        vscode.postMessage({ type: "exportAllPng", keys: selectedKeys });
     });
 
     const exportAllPdf =
@@ -1232,12 +1575,7 @@ function renderComparison(): void {
             return;
         }
 
-        selectedKeys.forEach((key) => {
-            vscode.postMessage({
-                type: "exportPdf",
-                key,
-            });
-        });
+        vscode.postMessage({ type: "exportAllPdf", keys: selectedKeys });
     });
     const exitButton =
         document.querySelector<HTMLButtonElement>(
@@ -1756,6 +2094,18 @@ function selectAdjacentFigure(
 document.addEventListener("keydown", (event) => {
     const target = event.target;
 
+    if (event.key === "Escape" && comparisonMode) {
+        event.preventDefault();
+        exitComparisonMode();
+        return;
+    }
+
+    if (event.key === "Escape" && historyMode) {
+        event.preventDefault();
+        vscode.postMessage({ type: "exitHistory" });
+        return;
+    }
+
     if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
@@ -1788,9 +2138,7 @@ document.addEventListener("keydown", (event) => {
             break;
         
         case "Escape":
-            if (comparisonMode) {
-                exitComparisonMode();
-            } else if (selectedKeys.length > 1) {
+            if (selectedKeys.length > 1) {
                 /*
                 * Keep the primary figure selected, but clear
                 * the additional selections.
@@ -2149,11 +2497,36 @@ function updatePreview(): void {
         return;
     }
 
-    const figureTitle =
-        selected.title ||
-        "Figure " + selected.number;
+    if (!selected.available) {
+        const figureTitle = selected.title || "Figure " + selected.number;
+        preview.dataset.figureKey = selected.key;
+        preview.dataset.figureVersion = selected.version;
+        preview.innerHTML =
+            '<div class="preview-header"><h2>' + escapeHtml(figureTitle) + '</h2></div>' +
+            '<div class="preview-unavailable">Reopen or rescan this notebook to load the starred image.</div>';
+        source.innerHTML = "";
+        reveal.disabled = false;
+        return;
+    }
+
+    const baseFigureTitle = selected.title || "Figure " + selected.number;
+    const figureTitle = historyMode && selected.historyPosition
+        ? `${baseFigureTitle} · Version ${selected.historyPosition} of ${selected.historyTotal}`
+        : baseFigureTitle;
 
     const tags = selected.tags || [];
+    const fullscreenAction =
+        '<button id="fullscreen-preview-figure" class="icon-button" type="button" title="Focus figure" aria-label="Focus figure">' + fullscreenIcon + "</button>";
+    const historyAction = historyMode
+        ? ""
+        : '<button id="open-figure-history" class="icon-button" type="button" title="Figure history" aria-label="Figure history"' +
+          (selected.hasHistory ? "" : " disabled") + ">" + historyIcon + "</button>";
+    const historyNavigation = historyMode
+        ? '<button id="history-previous" class="history-navigation history-navigation--previous" type="button" title="Previous version" aria-label="Previous version"' +
+          ((selected.historyPosition ?? 1) <= 1 ? " disabled" : "") + '>‹</button>' +
+          '<button id="history-next" class="history-navigation history-navigation--next" type="button" title="Next version" aria-label="Next version"' +
+          ((selected.historyPosition ?? 1) >= (selected.historyTotal ?? 1) ? " disabled" : "") + '>›</button>'
+        : "";
 
     const existingImage =
         preview.querySelector<HTMLImageElement>(
@@ -2164,6 +2537,8 @@ function updatePreview(): void {
         preview.dataset.figureKey;
     const existingFigureVersion =
         preview.dataset.figureVersion;
+    const existingHistoryMode =
+        preview.dataset.historyMode === "true";
 
     /*
      * If the same figure is still selected,
@@ -2175,6 +2550,7 @@ function updatePreview(): void {
     if (
         existingFigureKey === selected.key &&
         existingFigureVersion === selected.version &&
+        existingHistoryMode === historyMode &&
         existingImage
     ) {
         updatePreviewMetadata(selected);
@@ -2188,6 +2564,7 @@ function updatePreview(): void {
 
     preview.dataset.figureKey = selected.key;
     preview.dataset.figureVersion = selected.version;
+    preview.dataset.historyMode = String(historyMode);
 
     const tagHtml =
         tags.length > 0
@@ -2223,9 +2600,12 @@ function updatePreview(): void {
             'class="main-image" ' +
             'alt="preview">' +
             '<div class="image-hover-actions">' +
+                historyAction +
                 '<button id="reset-preview-zoom" type="button" title="Reset zoom" aria-label="Reset zoom">↻</button>' +
                 '<button id="download-preview-figure" class="icon-button" type="button" title="Download figure" aria-label="Download figure">' + saveIcon + '</button>' +
+                fullscreenAction +
             "</div>" +
+            historyNavigation +
         "</div>";
 
     if (document.body.classList.contains("editor-mode")) {
@@ -2246,6 +2626,20 @@ function updatePreview(): void {
             );
         }
     );
+
+    preview
+        .querySelector<HTMLButtonElement>("#open-figure-history")
+        ?.addEventListener("click", () => {
+            vscode.postMessage({ type: "enterHistory", key: selected.key });
+        });
+
+    preview
+        .querySelector<HTMLButtonElement>("#history-previous")
+        ?.addEventListener("click", () => selectHistoryVersion(-1));
+
+    preview
+        .querySelector<HTMLButtonElement>("#history-next")
+        ?.addEventListener("click", () => selectHistoryVersion(1));
 
     preview
         .querySelector<HTMLButtonElement>("#reset-preview-zoom")
@@ -2270,11 +2664,23 @@ function updatePreview(): void {
     preview
         .querySelector<HTMLButtonElement>("#download-preview-figure")
         ?.addEventListener("click", () => {
-            vscode.postMessage({ type: "download", key: selected.key });
+            void postDownload(selected.key);
         });
 
     preview
         .querySelector<HTMLButtonElement>("#download-preview-figure")
+        ?.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+    preview
+        .querySelector<HTMLButtonElement>("#fullscreen-preview-figure")
+        ?.addEventListener("click", () => {
+            if (imageViewport) {
+                toggleFigureFullscreen(imageViewport);
+            }
+        });
+
+    preview
+        .querySelector<HTMLButtonElement>("#fullscreen-preview-figure")
         ?.addEventListener("pointerdown", (event) => event.stopPropagation());
     
     preview
@@ -2318,22 +2724,74 @@ async function copyFigureToClipboard(
         return;
     }
 
-    try {
-        const response = await fetch(imageData);
+    const figure = catalog.find((candidate) => candidate.key === key);
+    await copyImageToClipboard(imageData, figure?.mimeType ?? "image/png");
+}
 
-        const blob = await response.blob();
+async function pngBase64ForKey(key: string): Promise<string | undefined> {
+    const imageData = previewImages.get(key);
 
-        const clipboardItem =
-            new ClipboardItem({
-                "image/png": blob,
-            });
-
-        await navigator.clipboard.write([
-            clipboardItem,
-        ]);
-    } catch {
-        window.alert("Could not copy the image to the clipboard.");
+    if (!imageData) {
+        return undefined;
     }
+
+    const response = await fetch(imageData);
+    const source = await response.blob();
+    const png = source.type === "image/png" ? source : await convertImageToPng(source);
+    const bytes = new Uint8Array(await png.arrayBuffer());
+    let binary = "";
+
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+
+    return btoa(binary);
+}
+
+async function postPdfExport(key: string): Promise<void> {
+    const figure = catalog.find((candidate) => candidate.key === key);
+
+    if (!figure) {
+        return;
+    }
+
+    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg") {
+        vscode.postMessage({ type: "exportPdf", key });
+        return;
+    }
+
+    const pngData = await pngBase64ForKey(key);
+
+    if (!pngData) {
+        pendingPdfKeys.add(key);
+        vscode.postMessage({ type: "requestPreview", key });
+        return;
+    }
+
+    vscode.postMessage({ type: "exportPdf", key, pngData });
+}
+
+async function postDownload(key: string): Promise<void> {
+    const figure = catalog.find((candidate) => candidate.key === key);
+
+    if (!figure) {
+        return;
+    }
+
+    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg") {
+        vscode.postMessage({ type: "download", key });
+        return;
+    }
+
+    const pngData = await pngBase64ForKey(key);
+
+    if (!pngData) {
+        pendingDownloadKeys.add(key);
+        vscode.postMessage({ type: "requestPreview", key });
+        return;
+    }
+
+    vscode.postMessage({ type: "download", key, pngData });
 }
 
 function showFigureContextMenu(
@@ -2361,16 +2819,38 @@ function showFigureContextMenu(
 
     menu.className = "figure-context-menu";
 
+    const actionKeys = selectedKeys.includes(key) && selectedKeys.length > 1
+        ? [...selectedKeys]
+        : [key];
+    const actionFigures = catalog.filter((figure) => actionKeys.includes(figure.key));
+    const plural = actionFigures.length > 1;
+    const shouldStar = actionFigures.some((figure) => !figure.starred);
+
+    const starAction = historyMode
+        ? ""
+        : '<button type="button" data-action="toggle-star">' +
+            (shouldStar
+                ? (plural ? "Star Selected Figures" : "Star Figure")
+                : (plural ? "Unstar Selected Figures" : "Unstar Figure")) +
+          "</button>";
+    const historyActions = historyMode
+        ? '<button type="button" data-action="view-version-code">View/restore version code…</button>' +
+          '<button type="button" data-action="copy-version-code">Copy version code</button>' +
+          '<button type="button" data-action="restore-version-code">Restore cell code…</button>'
+        : "";
+
     menu.innerHTML =
         '<button type="button" data-action="copy-image">' +
             "Copy Image" +
         "</button>" +
         '<button type="button" data-action="save-png">' +
-            "Save PNG" +
+            (plural ? "Save Selected Images" : "Save Image") +
         "</button>" +
         '<button type="button" data-action="export-pdf">' +
-            "Export PDF" +
-        "</button>";
+            (plural ? "Export Selected as PDF" : "Export PDF") +
+        "</button>" +
+        historyActions +
+        starAction;
 
     document.body.appendChild(menu);
 
@@ -2403,10 +2883,11 @@ function showFigureContextMenu(
             '[data-action="save-png"]'
         )
         ?.addEventListener("click", () => {
-            vscode.postMessage({
-                type: "savePNG",
-                key,
-            });
+            if (plural) {
+                vscode.postMessage({ type: "exportAllPng", keys: actionKeys });
+            } else {
+                void postDownload(key);
+            }
 
             menu.remove();
         });
@@ -2416,11 +2897,44 @@ function showFigureContextMenu(
             '[data-action="export-pdf"]'
         )
         ?.addEventListener("click", () => {
-            vscode.postMessage({
-                type: "exportPdf",
-                key,
-            });
+            if (plural) {
+                vscode.postMessage({ type: "exportAllPdf", keys: actionKeys });
+            } else {
+                void postPdfExport(key);
+            }
 
+            menu.remove();
+        });
+
+    menu
+        .querySelector<HTMLButtonElement>('[data-action="toggle-star"]')
+        ?.addEventListener("click", () => {
+            vscode.postMessage({
+                type: "setStars",
+                keys: actionKeys,
+                starred: shouldStar,
+            });
+            menu.remove();
+        });
+
+    menu
+        .querySelector<HTMLButtonElement>('[data-action="view-version-code"]')
+        ?.addEventListener("click", () => {
+            showVersionCodePanel(key);
+            menu.remove();
+        });
+
+    menu
+        .querySelector<HTMLButtonElement>('[data-action="copy-version-code"]')
+        ?.addEventListener("click", () => {
+            vscode.postMessage({ type: "copyVersionCode", key });
+            menu.remove();
+        });
+
+    menu
+        .querySelector<HTMLButtonElement>('[data-action="restore-version-code"]')
+        ?.addEventListener("click", () => {
+            vscode.postMessage({ type: "restoreVersionCode", key });
             menu.remove();
         });
 
@@ -2484,9 +2998,10 @@ async function copyImageToClipboard(
 function updatePreviewMetadata(
     selected: GalleryFigure
 ): void {
-    const figureTitle =
-        selected.title ||
-        "Figure " + selected.number;
+    const baseFigureTitle = selected.title || "Figure " + selected.number;
+    const figureTitle = historyMode && selected.historyPosition
+        ? `${baseFigureTitle} · Version ${selected.historyPosition} of ${selected.historyTotal}`
+        : baseFigureTitle;
 
     const heading =
         preview.querySelector<HTMLHeadingElement>("h2");
@@ -2552,6 +3067,8 @@ function updatePreviewMetadata(
    ───────────────────────────────────────────── */
 
 function render(): void {
+    exitFigureFullscreen();
+
     if (comparisonMode) {
         updateComparisonUI();
         renderComparison();
@@ -2611,11 +3128,9 @@ function render(): void {
         activeTags.length > 0
     );
 
-    count.textContent =
-        results.length +
-        " of " +
-        catalog.length +
-        " figures";
+    count.textContent = historyMode
+        ? `${results.length} of ${catalog.length} versions`
+        : results.length + " of " + catalog.length + " figures";
 
     updateThumbnailElements(results);
 
@@ -2647,8 +3162,9 @@ function updateThumbnailElements(
             figure.title ||
             "Figure " + figure.number;
 
-        const label =
-            scope === "all"
+        const label = historyMode && figure.historyPosition
+            ? `Version ${figure.historyPosition}`
+            : scope === "all"
                 ? figureTitle +
                   " · " +
                   figure.notebookName
@@ -2754,12 +3270,18 @@ function updateThumbnailElements(
         }
 
         labelElement.textContent = label;
+        button.classList.toggle("starred", figure.starred);
+        button.classList.toggle("unavailable", !figure.available);
+        button.title = figure.available
+            ? figureTitle
+            : `${figureTitle} — reopen or rescan the notebook to load the image`;
+        img.style.visibility = figure.available ? "" : "hidden";
 
         /*
          * Preserve the existing image if this figure
          * has not changed.
          */
-        if (
+        if (figure.available &&
             img.dataset.figureVersion !==
             figureVersion(figure)
         ) {
@@ -2777,6 +3299,10 @@ function updateThumbnailElements(
             } else {
                 thumbnailObserver.observe(img);
             }
+        } else if (!figure.available) {
+            thumbnailObserver.unobserve(img);
+            img.src = "";
+            img.dataset.loaded = "0";
         }
 
         button.classList.toggle(
@@ -3273,6 +3799,81 @@ function filteredCatalog(): GalleryFigure[] {
             number === query
         );
     });
+}
+
+function showVersionCodePanel(key: string): void {
+    const figure = catalog.find((candidate) => candidate.key === key);
+
+    if (!figure || !historyMode) {
+        return;
+    }
+
+    document.querySelector(".version-code-overlay")?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "version-code-overlay";
+    const panel = document.createElement("section");
+    panel.className = "version-code-panel";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-label", "Historical cell code");
+
+    const header = document.createElement("header");
+    const title = document.createElement("h2");
+    title.textContent = `Cell code · Version ${figure.historyPosition ?? ""}`.trim();
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "version-code-close";
+    close.textContent = "×";
+    close.title = "Close";
+    close.setAttribute("aria-label", "Close code panel");
+    header.append(title, close);
+
+    const location = document.createElement("p");
+    location.className = "version-code-location";
+    location.textContent = `${figure.notebookName} · Cell ${figure.cellIndex + 1}`;
+    const code = document.createElement("pre");
+    code.className = "version-code-source";
+    code.textContent = figure.cellSource || "No source code was captured for this version.";
+    const actions = document.createElement("footer");
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "Copy code";
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "primary";
+    restore.textContent = "Restore to cell";
+    restore.disabled = !figure.cellSource;
+    actions.append(copy, restore);
+    panel.append(header, location, code, actions);
+    overlay.append(panel);
+    document.body.append(overlay);
+
+    const dismiss = (): void => {
+        document.removeEventListener("keydown", onKeyDown);
+        overlay.remove();
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            dismiss();
+        }
+    };
+    close.addEventListener("click", dismiss);
+    overlay.addEventListener("pointerdown", (event) => {
+        if (event.target === overlay) {
+            dismiss();
+        }
+    });
+    copy.addEventListener("click", () => {
+        vscode.postMessage({ type: "copyVersionCode", key });
+    });
+    restore.addEventListener("click", () => {
+        vscode.postMessage({ type: "restoreVersionCode", key });
+        dismiss();
+    });
+    document.addEventListener("keydown", onKeyDown, true);
+    close.focus();
 }
 
 /* ─────────────────────────────────────────────

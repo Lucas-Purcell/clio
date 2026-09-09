@@ -2,6 +2,34 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.20] - 2026-08-26
+
+### Added
+
+- Added full-screen figure controls beside the reset-zoom and download actions in editor-window gallery previews and comparison views.
+- Added Focus Figure to sidebar gallery previews and comparison figures, temporarily using the entire Clio panel for the selected plot.
+- Added a Gallery settings menu for button labels, fixed thumbnail size, and comparison layout preferences.
+- Added JPEG, WebP, and SVG discovery, previews, original-format downloads, PDF export, and PNG clipboard conversion alongside PNG figures.
+- Added persistent starred figures with a dedicated Starred gallery scope, thumbnail markers, preview and context actions, and retained metadata for figures in closed notebooks.
+- Added session-only figure history: rerunning a figure-producing cell preserves earlier plot versions for preview navigation, comparison, copying, and export until VS Code closes.
+- Added history-version code viewing, copying, and safe restoration with stable cell targeting and normal editor Undo support.
+
+### Changed
+
+- Update figure titles and tags immediately when their notebook metadata comments change, without rescanning or reloading image data.
+- Apply toolbar and context-menu save/export and star/unstar actions to all selected thumbnails.
+
+### Fixed
+
+- Rehydrate the separate-window Gallery after VS Code suspends or recreates its background webview, without requiring the user to revisit a notebook.
+- Route thumbnail and preview responses only to the Gallery surface that requested them, avoiding duplicate image transfers between the sidebar and editor-window Gallery.
+- Replaced the embedded-host browser fullscreen request with a reliable in-gallery focus mode; Escape restores the regular gallery layout.
+- Kept Gallery controls and dropdown menus within narrow or resized panel bounds.
+- Preserve the previous plot across the transient output-clearing stage of a cell rerun, so figure history becomes available when the replacement output arrives.
+- Detect rerun images even when VS Code reuses an output byte buffer, while retaining an immutable snapshot of the preceding plot for history.
+- Use one shared history and image-store instance throughout the VS Code bundle, allowing captured versions to activate the Gallery history controls.
+- Preserve Focus Figure and update its visible image when navigating between history versions.
+
 ## [0.1.19] - 2026-08-19
 
 ### Changed

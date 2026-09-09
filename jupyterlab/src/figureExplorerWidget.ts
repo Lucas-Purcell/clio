@@ -1,11 +1,32 @@
-import { FigureRecord, imageStore, NotebookFigures } from "@clio/shared";
+import {
+    FigureRecord,
+    figureHistorySourceKey,
+    figureHistoryStore,
+    imageExtension,
+    imageFormatLabel,
+    imageStore,
+    NotebookFigures,
+    StarredFigureRecord,
+} from "@clio/shared";
 import { Widget } from "@lumino/widgets";
 import { PDFDocument } from "pdf-lib";
 import tagSvg from "../style/tag.svg";
 
-type Scope = "notebook" | "all";
+type Scope = "notebook" | "all" | "starred";
 type TitleFilter = "all" | "titled" | "untitled";
-type GalleryIcon = "tag" | "image" | "pdf" | "download" | "notebook" | "notebooks" | "locate";
+type GalleryIcon = "tag" | "image" | "pdf" | "download" | "notebook" | "notebooks" | "star" | "history" | "locate" | "fullscreen" | "settings";
+
+export interface GallerySettings {
+    buttonStyle: "icons" | "labels";
+    thumbnailSize: "small" | "medium" | "large";
+    compareLayout: "auto" | "grid" | "stack";
+}
+
+export const defaultGallerySettings: GallerySettings = {
+    buttonStyle: "icons",
+    thumbnailSize: "medium",
+    compareLayout: "auto",
+};
 
 const tagIconSvg = tagSvg.replaceAll("black", "currentColor");
 
@@ -17,7 +38,11 @@ function galleryIcon(icon: GalleryIcon): string {
         download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg>',
         notebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v15H6a2 2 0 0 0-2 2V5a2 2 0 0 1 2-2Z"/><path d="M7 7h8M7 11h8M7 15h5"/><path d="M4 5v17"/></svg>',
         notebooks: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h11a2 2 0 0 1 2 2v13H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M5 7H3v13a2 2 0 0 0 2 2h11"/></svg>',
+        star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>',
+        history: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/><path d="M5.5 5.5 3 8V3h5"/></svg>',
         locate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 12h8M12 8v8"/></svg>',
+        fullscreen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>',
+        settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.5 2.5-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3.54v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.5-2.5.06-.06A1.7 1.7 0 0 0 6.72 15 1.7 1.7 0 0 0 5.16 14H5.1v-3.54h.06A1.7 1.7 0 0 0 6.72 9.43a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.5-2.5.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.03-1.56v-.1h3.54v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.5 2.5-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.1V14h-.1A1.7 1.7 0 0 0 19.4 15Z"/></svg>',
     };
     return icons[icon];
 }
@@ -25,7 +50,10 @@ function galleryIcon(icon: GalleryIcon): string {
 export class FigureExplorerWidget extends Widget {
     private notebooks: readonly NotebookFigures[] = [];
     private currentNotebookUri: string | undefined;
+    private starredFigures: readonly StarredFigureRecord[];
     private scope: Scope;
+    private historySourceKey: string | undefined;
+    private historySourceFallback: FigureRecord | undefined;
     private query = "";
     private selectedFigureId: string | undefined;
     private readonly selectedFigureIds = new Set<string>();
@@ -33,6 +61,10 @@ export class FigureExplorerWidget extends Widget {
     private comparisonMode = false;
     private tagMenuOpen = false;
     private filterMenuOpen = false;
+    private settingsMenuOpen = false;
+    private openMenu: { element: HTMLElement; anchor: HTMLElement } | undefined;
+    private menuDismissListener: ((event: PointerEvent) => void) | undefined;
+    private menuKeyListener: ((event: KeyboardEvent) => void) | undefined;
     private titleFilter: TitleFilter = "all";
     private previewFigureId: string | undefined;
     private previewZoom = 1;
@@ -40,6 +72,12 @@ export class FigureExplorerWidget extends Widget {
     private previewPanY = 0;
     private thumbnailScrollTop = 0;
     private scrollSelectionIntoView = false;
+    private fullscreenFigure: {
+        viewport: HTMLElement;
+        parent: Node;
+        nextSibling: ChildNode | null;
+        overlay: HTMLDivElement;
+    } | undefined;
     private readonly comparisonTransforms = new Map<string, {
         zoom: number;
         panX: number;
@@ -70,14 +108,23 @@ export class FigureExplorerWidget extends Widget {
             }
         }
     }, { threshold: 0.05 });
+    private readonly menuBoundsObserver = new ResizeObserver(() => {
+        this.positionOpenMenu();
+    });
 
     constructor(
         private readonly onRevealCell: (figure: FigureRecord) => void,
         initialScope: Scope = "notebook",
-        isExternalWindow = false
+        isExternalWindow = false,
+        private settings: GallerySettings = defaultGallerySettings,
+        private readonly onSettingsChange?: (settings: GallerySettings) => void,
+        starredFigures: readonly StarredFigureRecord[] = [],
+        private readonly onToggleStar?: (figure: FigureRecord) => void,
+        private readonly onRestoreCellSource?: (figure: FigureRecord) => boolean
     ) {
         super();
         this.scope = initialScope;
+        this.starredFigures = starredFigures;
         this.addClass("jp-FigureExplorer");
         if (isExternalWindow) {
             this.addClass("jp-mod-externalWindow");
@@ -86,7 +133,59 @@ export class FigureExplorerWidget extends Widget {
         this.title.closable = true;
         this.node.tabIndex = 0;
         this.node.addEventListener("keydown", (event) => this.handleKeyDown(event));
+        this.menuBoundsObserver.observe(this.node);
+        this.applySettingsClass();
         this.render();
+    }
+
+    setSettings(settings: GallerySettings): void {
+        const next = normalizeGallerySettings(settings);
+
+        if (sameGallerySettings(this.settings, next)) {
+            return;
+        }
+
+        this.settings = next;
+        this.applySettingsClass();
+        this.render();
+    }
+
+    setStarredFigures(starredFigures: readonly StarredFigureRecord[]): void {
+        const previous = this.starredFigures.map((entry) => [
+            entry.figure.id,
+            entry.figure.version,
+            entry.figure.title,
+            entry.figure.tags,
+        ]);
+        const next = starredFigures.map((entry) => [
+            entry.figure.id,
+            entry.figure.version,
+            entry.figure.title,
+            entry.figure.tags,
+        ]);
+
+        if (JSON.stringify(previous) === JSON.stringify(next)) {
+            return;
+        }
+
+        this.starredFigures = starredFigures;
+        this.render();
+    }
+
+    private updateSettings(settings: GallerySettings): void {
+        this.settings = normalizeGallerySettings(settings);
+        this.settingsMenuOpen = true;
+        this.applySettingsClass();
+        this.onSettingsChange?.(this.settings);
+        this.render();
+    }
+
+    private applySettingsClass(): void {
+        this.toggleClass("jp-mod-buttonLabels", this.settings.buttonStyle === "labels");
+        this.removeClass("jp-mod-thumbnail-small");
+        this.removeClass("jp-mod-thumbnail-medium");
+        this.removeClass("jp-mod-thumbnail-large");
+        this.addClass(`jp-mod-thumbnail-${this.settings.thumbnailSize}`);
     }
 
     setNotebooks(
@@ -120,7 +219,69 @@ export class FigureExplorerWidget extends Widget {
         this.focusGallery();
     }
 
+    private enterHistoryMode(figure: FigureRecord): void {
+        if (!figureHistoryStore.hasHistory(figure)) {
+            return;
+        }
+
+        this.historySourceKey = figureHistorySourceKey(figure);
+        this.historySourceFallback = figure;
+        const versions = this.figuresForScope();
+        this.selectedFigureId = versions[versions.length - 1]?.id;
+        this.selectedFigureIds.clear();
+        if (this.selectedFigureId) {
+            this.selectedFigureIds.add(this.selectedFigureId);
+        }
+        this.selectionAnchorId = this.selectedFigureId;
+        this.render();
+    }
+
+    private exitHistoryMode(): void {
+        const sourceKey = this.historySourceKey;
+        this.historySourceKey = undefined;
+        this.historySourceFallback = undefined;
+        const current = sourceKey
+            ? this.notebooks
+                .flatMap((notebook) => notebook.figures)
+                .find((figure) => figureHistorySourceKey(figure) === sourceKey)
+            : undefined;
+        this.selectedFigureId = current?.id ?? this.selectedFigureId;
+        this.selectedFigureIds.clear();
+        if (this.selectedFigureId) {
+            this.selectedFigureIds.add(this.selectedFigureId);
+        }
+        this.selectionAnchorId = this.selectedFigureId;
+        this.render();
+    }
+
+    private selectHistoryVersion(direction: -1 | 1): void {
+        const versions = this.figuresForScope();
+        const index = versions.findIndex((figure) => figure.id === this.selectedFigureId);
+        const next = versions[Math.max(0, Math.min(versions.length - 1, index + direction))];
+
+        if (next && next.id !== this.selectedFigureId) {
+            const restoreFocusedPreview = Boolean(
+                this.fullscreenFigure?.viewport.classList.contains(
+                    "jp-FigureExplorer-previewViewport"
+                )
+            );
+            this.selectFigure(next.id);
+
+            if (restoreFocusedPreview) {
+                const viewport = this.node.querySelector<HTMLElement>(
+                    ".jp-FigureExplorer-previewViewport"
+                );
+
+                if (viewport) {
+                    this.toggleFullscreen(viewport);
+                }
+            }
+        }
+    }
+
     showNotebook(uri: string): void {
+        this.historySourceKey = undefined;
+        this.historySourceFallback = undefined;
         this.scope = "notebook";
         this.currentNotebookUri = uri;
         const figures = this.figuresForScope();
@@ -134,12 +295,17 @@ export class FigureExplorerWidget extends Widget {
     }
 
     dispose(): void {
+        this.removeOpenMenu();
+        this.menuBoundsObserver.disconnect();
         this.thumbnailObserver.disconnect();
         this.revokeObjectUrls();
         super.dispose();
     }
 
     private render(focusSearch = false, caretPosition?: number): void {
+        this.removeOpenMenu();
+        this.exitFigureFullscreen();
+        this.toggleClass("jp-mod-history", Boolean(this.historySourceKey));
         const previousGrid = this.node.querySelector<HTMLElement>(
             ".jp-FigureExplorer-grid"
         );
@@ -194,7 +360,9 @@ export class FigureExplorerWidget extends Widget {
 
         controls.append(this.createScopeButton("notebook", "This notebook"));
         controls.append(this.createScopeButton("all", "All open"));
+        controls.append(this.createScopeButton("starred", "Starred"));
         controls.append(this.createFilterPicker());
+        controls.append(this.createSettingsPicker());
         header.append(controls);
 
         const activeFilters = this.createActiveFilters();
@@ -217,7 +385,9 @@ export class FigureExplorerWidget extends Widget {
         resultRow.className = "jp-FigureExplorer-resultRow";
         const count = document.createElement("p");
         count.className = "jp-FigureExplorer-count";
-        count.textContent = `${figures.length} figure${figures.length === 1 ? "" : "s"}`;
+        count.textContent = this.historySourceKey
+            ? `${figures.length} version${figures.length === 1 ? "" : "s"}`
+            : `${figures.length} figure${figures.length === 1 ? "" : "s"}`;
         resultRow.append(count);
         resultRow.append(this.createSelectionActions(figures));
         this.node.append(resultRow);
@@ -275,20 +445,25 @@ export class FigureExplorerWidget extends Widget {
             button.className = textButton
                 ? "jp-FigureExplorer-textAction"
                 : "jp-FigureExplorer-iconButton";
-            if (icon === "tag" || icon === "image" || icon === "pdf" || icon === "download") {
+            if (icon === "tag" || icon === "image" || icon === "pdf" || icon === "download" || icon === "star" || icon === "history") {
                 button.innerHTML = galleryIcon(icon);
             } else {
                 button.textContent = icon;
             }
             button.title = label;
             button.setAttribute("aria-label", label);
+            button.dataset.buttonLabel = label;
             button.disabled = disabled;
             button.addEventListener("click", () => { void action(); });
             actions.append(button);
         };
 
+        if (this.historySourceKey) {
+            addButton("×", "Exit figure history", () => this.exitHistoryMode());
+        }
+
         if (this.comparisonMode) {
-            addButton("Save all PNG", "Save all selected figures as PNG", () => this.savePng(selected), selected.length === 0, true);
+            addButton("Save all images", "Save all selected figures", () => this.saveImages(selected), selected.length === 0, true);
             addButton("Export all PDF", "Export all selected figures as PDF", () => this.exportPdf(selected), selected.length === 0, true);
         } else {
             addButton(
@@ -297,10 +472,29 @@ export class FigureExplorerWidget extends Widget {
                     ? `Download ${selected.length} selected figures`
                     : "Download figure",
                 async () => {
-                    for (const figure of selected) {
-                        await this.downloadFigure(figure);
+                    if (selected.length === 1) {
+                        await this.downloadFigure(selected[0]);
+                    } else {
+                        this.saveImages(selected);
                     }
                 },
+                selected.length === 0
+            );
+            addButton(
+                "pdf",
+                selected.length > 1
+                    ? `Export ${selected.length} selected figures as PDF`
+                    : "Export figure as PDF",
+                () => this.exportPdf(selected),
+                selected.length === 0
+            );
+        }
+        if (!this.historySourceKey) {
+            const shouldStar = selected.some((figure) => !this.isStarred(figure));
+            addButton(
+                "star",
+                `${shouldStar ? "Star" : "Unstar"} ${selected.length > 1 ? `${selected.length} figures` : "figure"}`,
+                () => this.setStarred(selected, shouldStar),
                 selected.length === 0
             );
         }
@@ -338,15 +532,25 @@ export class FigureExplorerWidget extends Widget {
         const grid = document.createElement("div");
         grid.className = "jp-FigureExplorer-comparisonGrid";
         const supportsResizableComparison =
-            this.hasClass("jp-mod-externalWindow") ||
-            this.hasClass("jp-mod-tabGallery");
+            this.settings.compareLayout === "auto" &&
+            (this.hasClass("jp-mod-externalWindow") ||
+                this.hasClass("jp-mod-tabGallery"));
         grid.classList.toggle(
             "jp-mod-resizable",
             supportsResizableComparison && selected.length === 2
         );
         grid.classList.toggle(
             "jp-mod-scrollable",
-            supportsResizableComparison && selected.length > 4
+            this.settings.compareLayout === "auto" &&
+                supportsResizableComparison && selected.length > 4
+        );
+        grid.classList.toggle(
+            "jp-mod-layout-stack",
+            this.settings.compareLayout === "stack"
+        );
+        grid.classList.toggle(
+            "jp-mod-layout-grid",
+            this.settings.compareLayout === "grid"
         );
         for (const [index, figure] of selected.entries()) {
             if (index > 0 && grid.classList.contains("jp-mod-resizable")) {
@@ -368,9 +572,17 @@ export class FigureExplorerWidget extends Widget {
             const image = document.createElement("img");
             image.alt = figure.title ?? `Figure ${index + 1}`;
             image.draggable = false;
-            image.src = this.imageUrl(figure);
-            viewport.append(image);
-            this.setupComparisonZoom(viewport, image, figure.id);
+            const available = imageStore.get(figure.id) !== undefined;
+            if (available) {
+                image.src = this.imageUrl(figure);
+                viewport.append(image);
+                this.setupComparisonZoom(viewport, image, figure.id);
+            } else {
+                const unavailable = document.createElement("div");
+                unavailable.className = "jp-FigureExplorer-previewUnavailable";
+                unavailable.textContent = "Reopen or rescan the notebook to load this figure.";
+                viewport.append(unavailable);
+            }
 
             const hoverActions = document.createElement("div");
             hoverActions.className = "jp-FigureExplorer-imageHoverActions";
@@ -391,10 +603,13 @@ export class FigureExplorerWidget extends Widget {
             download.innerHTML = galleryIcon("download");
             download.title = "Download figure";
             download.setAttribute("aria-label", "Download figure");
+            download.disabled = !available;
             download.addEventListener("pointerdown", (event) => event.stopPropagation());
             download.addEventListener("click", () => { void this.downloadFigure(figure); });
-            hoverActions.append(reset, download);
-            viewport.append(hoverActions);
+            if (available) {
+                hoverActions.append(reset, download, this.createFullscreenButton(viewport));
+                viewport.append(hoverActions);
+            }
             card.append(viewport);
 
             const label = document.createElement("h4");
@@ -557,11 +772,31 @@ export class FigureExplorerWidget extends Widget {
     }
 
     private handleKeyDown(event: KeyboardEvent): void {
-        if (event.key === "Escape" && (this.tagMenuOpen || this.filterMenuOpen)) {
+        if (event.key === "Escape" && this.fullscreenFigure) {
+            event.preventDefault();
+            this.exitFigureFullscreen();
+            return;
+        }
+
+        if (event.key === "Escape" && (this.tagMenuOpen || this.filterMenuOpen || this.settingsMenuOpen)) {
             event.preventDefault();
             this.tagMenuOpen = false;
             this.filterMenuOpen = false;
+            this.settingsMenuOpen = false;
             this.render();
+            return;
+        }
+
+        if (event.key === "Escape" && this.comparisonMode) {
+            event.preventDefault();
+            this.comparisonMode = false;
+            this.render();
+            return;
+        }
+
+        if (event.key === "Escape" && this.historySourceKey) {
+            event.preventDefault();
+            this.exitHistoryMode();
             return;
         }
 
@@ -617,15 +852,22 @@ export class FigureExplorerWidget extends Widget {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "jp-FigureExplorer-scope";
-        button.innerHTML = `${galleryIcon(scope === "notebook" ? "notebook" : "notebooks")}<span class="jp-FigureExplorer-scopeLabel">${label}</span>`;
+        const icon = scope === "notebook"
+            ? "notebook"
+            : scope === "all"
+                ? "notebooks"
+                : "star";
+        button.innerHTML = `${galleryIcon(icon)}<span class="jp-FigureExplorer-scopeLabel">${label}</span>`;
         button.title = label;
         button.setAttribute("aria-label", label);
         button.classList.toggle("jp-mod-active", this.scope === scope);
-        button.disabled = scope === "notebook" && !this.currentNotebookUri;
+        button.disabled = Boolean(this.historySourceKey) ||
+            (scope === "notebook" && !this.currentNotebookUri);
         button.addEventListener("click", () => {
             this.scope = scope;
             this.tagMenuOpen = false;
             this.filterMenuOpen = false;
+            this.settingsMenuOpen = false;
             this.render();
         });
         return button;
@@ -644,10 +886,12 @@ export class FigureExplorerWidget extends Widget {
             : "Add tag filter";
         button.title = tagLabel;
         button.setAttribute("aria-label", tagLabel);
+        button.dataset.buttonLabel = "Add tag";
         button.setAttribute("aria-expanded", String(this.tagMenuOpen));
         button.addEventListener("click", () => {
             this.tagMenuOpen = !this.tagMenuOpen;
             this.filterMenuOpen = false;
+            this.settingsMenuOpen = false;
             this.render();
         });
         picker.append(button);
@@ -676,8 +920,10 @@ export class FigureExplorerWidget extends Widget {
             menu.append(option);
         }
 
-        picker.append(menu);
-        this.dismissMenuOnOutsidePointer(picker, "tag");
+        document.body.append(menu);
+        this.openMenu = { element: menu, anchor: button };
+        this.dismissMenuOnOutsidePointer(picker, menu, "tag");
+        requestAnimationFrame(() => this.positionMenu(menu, button));
         return picker;
     }
 
@@ -693,6 +939,7 @@ export class FigureExplorerWidget extends Widget {
         button.addEventListener("click", () => {
             this.filterMenuOpen = !this.filterMenuOpen;
             this.tagMenuOpen = false;
+            this.settingsMenuOpen = false;
             this.render();
         });
         picker.append(button);
@@ -723,28 +970,163 @@ export class FigureExplorerWidget extends Widget {
             menu.append(option);
         }
 
-        picker.append(menu);
-        this.dismissMenuOnOutsidePointer(picker, "filter");
+        document.body.append(menu);
+        this.openMenu = { element: menu, anchor: button };
+        this.dismissMenuOnOutsidePointer(picker, menu, "filter");
+        requestAnimationFrame(() => this.positionMenu(menu, button));
         return picker;
+    }
+
+    private createSettingsPicker(): HTMLElement {
+        const picker = document.createElement("div");
+        picker.className = "jp-FigureExplorer-settingsPicker";
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "jp-FigureExplorer-iconButton";
+        button.innerHTML = galleryIcon("settings");
+        button.dataset.buttonLabel = "Settings";
+        button.title = "Gallery settings";
+        button.setAttribute("aria-label", "Gallery settings");
+        button.setAttribute("aria-expanded", String(this.settingsMenuOpen));
+        button.addEventListener("click", () => {
+            this.settingsMenuOpen = !this.settingsMenuOpen;
+            this.tagMenuOpen = false;
+            this.filterMenuOpen = false;
+            this.render();
+        });
+        picker.append(button);
+
+        if (!this.settingsMenuOpen) {
+            return picker;
+        }
+
+        const menu = document.createElement("div");
+        menu.className = "jp-FigureExplorer-settingsMenu";
+        const addGroup = <K extends keyof GallerySettings>(
+            label: string,
+            key: K,
+            options: readonly [GallerySettings[K], string][]
+        ): void => {
+            const group = document.createElement("div");
+            group.className = "jp-FigureExplorer-settingsGroup";
+            const heading = document.createElement("span");
+            heading.className = "jp-FigureExplorer-settingsLabel";
+            heading.textContent = label;
+            const optionsElement = document.createElement("div");
+            optionsElement.className = "jp-FigureExplorer-settingsOptions";
+
+            for (const [value, optionLabel] of options) {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.textContent = optionLabel;
+                option.classList.toggle("jp-mod-active", this.settings[key] === value);
+                option.addEventListener("click", () => {
+                    this.updateSettings({ ...this.settings, [key]: value });
+                });
+                optionsElement.append(option);
+            }
+
+            group.append(heading, optionsElement);
+            menu.append(group);
+        };
+
+        addGroup("Buttons", "buttonStyle", [["icons", "Icons"], ["labels", "Labels"]]);
+        addGroup("Thumbnails", "thumbnailSize", [["small", "Small"], ["medium", "Medium"], ["large", "Large"]]);
+        addGroup("Compare", "compareLayout", [["auto", "Auto"], ["grid", "Grid"], ["stack", "Stack"]]);
+        document.body.append(menu);
+        this.openMenu = { element: menu, anchor: button };
+        this.dismissMenuOnOutsidePointer(picker, menu, "settings");
+        requestAnimationFrame(() => this.positionMenu(menu, button));
+        return picker;
+    }
+
+    private positionOpenMenu(): void {
+        if (this.openMenu) {
+            this.positionMenu(this.openMenu.element, this.openMenu.anchor);
+        }
+    }
+
+    private removeOpenMenu(): void {
+        this.openMenu?.element.remove();
+        this.openMenu = undefined;
+        if (this.menuDismissListener) {
+            document.removeEventListener("pointerdown", this.menuDismissListener);
+            this.menuDismissListener = undefined;
+        }
+        if (this.menuKeyListener) {
+            document.removeEventListener("keydown", this.menuKeyListener, true);
+            this.menuKeyListener = undefined;
+        }
+    }
+
+    private positionMenu(menu: HTMLElement, picker: HTMLElement): void {
+        const margin = 8;
+        const gap = 4;
+        const panelBounds = this.node.getBoundingClientRect();
+        const pickerBounds = picker.getBoundingClientRect();
+        const availableBelow = panelBounds.bottom - pickerBounds.bottom - margin - gap;
+        const availableAbove = pickerBounds.top - panelBounds.top - margin - gap;
+        const openAbove = availableBelow < 96 && availableAbove > availableBelow;
+
+        menu.style.position = "fixed";
+        menu.style.right = "auto";
+        menu.style.left = "0";
+        menu.style.top = "0";
+        menu.style.maxWidth = `${Math.max(0, panelBounds.width - margin * 2)}px`;
+        menu.style.maxHeight = `${Math.max(0, Math.min(240, openAbove ? availableAbove : availableBelow))}px`;
+
+        const menuBounds = menu.getBoundingClientRect();
+        const left = Math.max(
+            panelBounds.left + margin,
+            Math.min(
+                pickerBounds.left,
+                panelBounds.right - menuBounds.width - margin
+            )
+        );
+        const top = openAbove
+            ? Math.max(panelBounds.top + margin, pickerBounds.top - menuBounds.height - gap)
+            : Math.min(
+                Math.max(panelBounds.top + margin, pickerBounds.bottom + gap),
+                panelBounds.bottom - menuBounds.height - margin
+            );
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
     }
 
     private dismissMenuOnOutsidePointer(
         picker: HTMLElement,
-        menu: "tag" | "filter"
+        menuElement: HTMLElement,
+        menu: "tag" | "filter" | "settings"
     ): void {
         queueMicrotask(() => {
-            document.addEventListener("pointerdown", (event) => {
-                if (picker.contains(event.target as Node)) {
-                    return;
-                }
-
+            const dismiss = (): void => {
                 if (menu === "tag") {
                     this.tagMenuOpen = false;
-                } else {
+                } else if (menu === "filter") {
                     this.filterMenuOpen = false;
+                } else {
+                    this.settingsMenuOpen = false;
                 }
                 this.render();
-            }, { once: true });
+            };
+            this.menuDismissListener = (event: PointerEvent): void => {
+                const target = event.target as Node;
+                if (picker.contains(target) || menuElement.contains(target)) {
+                    return;
+                }
+                dismiss();
+            };
+            this.menuKeyListener = (event: KeyboardEvent): void => {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    dismiss();
+                }
+            };
+            document.addEventListener("pointerdown", this.menuDismissListener);
+            document.addEventListener("keydown", this.menuKeyListener, true);
         });
     }
 
@@ -792,6 +1174,9 @@ export class FigureExplorerWidget extends Widget {
         card.tabIndex = 0;
         card.dataset.figureId = figure.id;
         card.classList.toggle("jp-mod-multiSelected", this.selectedFigureIds.has(figure.id));
+        card.classList.toggle("jp-mod-starred", this.isStarred(figure));
+        const available = imageStore.get(figure.id) !== undefined;
+        card.classList.toggle("jp-mod-unavailable", !available);
         let pendingClick: number | undefined;
         card.addEventListener("click", (event) => {
             if (event.detail === 2) {
@@ -818,22 +1203,31 @@ export class FigureExplorerWidget extends Widget {
             this.showFigureContextMenu(event, figure);
         });
 
-        const image = document.createElement("img");
-        image.alt = figure.title ?? `Figure ${number}`;
-        image.draggable = false;
-        image.dataset.figureId = figure.id;
-        image.dataset.figureVersion = figure.version;
-        const thumbnail = this.thumbnailUrls.get(figure.id);
-        if (thumbnail?.version === figure.version) {
-            image.src = thumbnail.url;
+        if (available) {
+            const image = document.createElement("img");
+            image.alt = figure.title ?? `Figure ${number}`;
+            image.draggable = false;
+            image.dataset.figureId = figure.id;
+            image.dataset.figureVersion = figure.version;
+            const thumbnail = this.thumbnailUrls.get(figure.id);
+            if (thumbnail?.version === figure.version) {
+                image.src = thumbnail.url;
+            } else {
+                this.thumbnailObserver.observe(image);
+            }
+            card.append(image);
         } else {
-            this.thumbnailObserver.observe(image);
+            const placeholder = document.createElement("span");
+            placeholder.className = "jp-FigureExplorer-thumbnailUnavailable";
+            placeholder.textContent = "Image unavailable";
+            card.append(placeholder);
         }
-        card.append(image);
 
         const label = document.createElement("span");
         label.className = "jp-FigureExplorer-thumbnailLabel";
-        label.textContent = figure.title ?? `Figure ${number}`;
+        label.textContent = this.historySourceKey
+            ? `Version ${number}`
+            : figure.title ?? `Figure ${number}`;
         card.append(label);
 
         return card;
@@ -949,8 +1343,22 @@ export class FigureExplorerWidget extends Widget {
         const previewHeader = document.createElement("div");
         previewHeader.className = "jp-FigureExplorer-previewHeader";
         const heading = document.createElement("h3");
-        heading.textContent = figure.title ?? `Figure ${number}`;
+        heading.textContent = this.historySourceKey
+            ? `${figure.title ?? "Figure"} · Version ${number} of ${figures.length}`
+            : figure.title ?? `Figure ${number}`;
         previewHeader.append(heading);
+
+        if (!this.historySourceKey) {
+            const star = document.createElement("button");
+            star.type = "button";
+            star.className = "jp-FigureExplorer-iconButton jp-FigureExplorer-starButton";
+            star.innerHTML = galleryIcon("star");
+            star.classList.toggle("jp-mod-active", this.isStarred(figure));
+            star.title = this.isStarred(figure) ? "Unstar figure" : "Star figure";
+            star.setAttribute("aria-label", star.title);
+            star.addEventListener("click", () => this.onToggleStar?.(figure));
+            previewHeader.append(star);
+        }
 
         const viewport = document.createElement("div");
         viewport.className = "jp-FigureExplorer-previewViewport";
@@ -959,8 +1367,17 @@ export class FigureExplorerWidget extends Widget {
         image.className = "jp-FigureExplorer-previewImage";
         image.alt = figure.title ?? "Selected figure";
         image.draggable = false;
-        image.src = this.imageUrl(figure);
-        viewport.append(image);
+        const available = imageStore.get(figure.id) !== undefined;
+        if (available) {
+            image.src = this.imageUrl(figure);
+            viewport.append(image);
+        } else {
+            viewport.classList.add("jp-mod-unavailable");
+            const unavailable = document.createElement("div");
+            unavailable.className = "jp-FigureExplorer-previewUnavailable";
+            unavailable.textContent = "Reopen or rescan this notebook to load the starred image.";
+            viewport.append(unavailable);
+        }
 
         const updateTransform = (): void => {
             image.style.transform =
@@ -1059,7 +1476,9 @@ export class FigureExplorerWidget extends Widget {
             }
         });
         addZoomButton("+", () => { this.previewZoom = Math.min(8, this.previewZoom * 1.25); });
-        previewHeader.append(zoomControls);
+        if (available) {
+            previewHeader.append(zoomControls);
+        }
 
         const hoverActions = document.createElement("div");
         hoverActions.className = "jp-FigureExplorer-imageHoverActions";
@@ -1084,8 +1503,47 @@ export class FigureExplorerWidget extends Widget {
         download.setAttribute("aria-label", "Download figure");
         download.addEventListener("pointerdown", (event) => event.stopPropagation());
         download.addEventListener("click", () => { void this.downloadFigure(figure); });
-        hoverActions.append(reset, download);
-        viewport.append(hoverActions);
+        if (available) {
+            if (!this.historySourceKey) {
+                const history = document.createElement("button");
+                history.type = "button";
+                history.className = "jp-FigureExplorer-iconButton";
+                history.innerHTML = galleryIcon("history");
+                history.title = figureHistoryStore.hasHistory(figure)
+                    ? "View figure history"
+                    : "No earlier versions in this session";
+                history.setAttribute("aria-label", history.title);
+                history.disabled = !figureHistoryStore.hasHistory(figure);
+                history.addEventListener("pointerdown", (event) => event.stopPropagation());
+                history.addEventListener("click", () => this.enterHistoryMode(figure));
+                hoverActions.append(history);
+            }
+            hoverActions.append(reset, download, this.createFullscreenButton(viewport));
+            viewport.append(hoverActions);
+        }
+
+        if (this.historySourceKey) {
+            const addHistoryArrow = (
+                direction: -1 | 1,
+                label: string,
+                disabled: boolean
+            ): void => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = direction < 0
+                    ? "jp-FigureExplorer-historyArrow jp-mod-previous"
+                    : "jp-FigureExplorer-historyArrow jp-mod-next";
+                button.textContent = direction < 0 ? "‹" : "›";
+                button.title = label;
+                button.setAttribute("aria-label", label);
+                button.disabled = disabled;
+                button.addEventListener("pointerdown", (event) => event.stopPropagation());
+                button.addEventListener("click", () => this.selectHistoryVersion(direction));
+                viewport.append(button);
+            };
+            addHistoryArrow(-1, "Previous version", number <= 1);
+            addHistoryArrow(1, "Next version", number >= figures.length);
+        }
 
         const reveal = document.createElement("button");
         reveal.type = "button";
@@ -1122,6 +1580,33 @@ export class FigureExplorerWidget extends Widget {
     }
 
     private figuresForScope(): FigureRecord[] {
+        if (this.historySourceKey) {
+            const current = this.notebooks
+                .flatMap((notebook) => notebook.figures)
+                .find((figure) =>
+                    figureHistorySourceKey(figure) === this.historySourceKey
+                ) ?? this.historySourceFallback;
+
+            if (!current) {
+                return [];
+            }
+
+            this.historySourceFallback = current;
+            return figureHistoryStore.getVersions(current);
+        }
+
+        if (this.scope === "starred") {
+            const live = new Map(
+                this.notebooks.flatMap((notebook) =>
+                    notebook.figures.map((figure) => [figure.id, figure] as const)
+                )
+            );
+
+            return [...this.starredFigures]
+                .sort((left, right) => right.starredAt - left.starredAt)
+                .map((entry) => live.get(entry.figure.id) ?? entry.figure);
+        }
+
         const notebooks = this.scope === "all"
             ? this.notebooks
             : this.notebooks.filter((notebook) => notebook.uri === this.currentNotebookUri);
@@ -1131,9 +1616,29 @@ export class FigureExplorerWidget extends Widget {
 
     private filteredFigures(): FigureRecord[] {
         const query = this.query.trim().toLowerCase();
+        const scopedFigures = this.figuresForScope();
 
-        return this.figuresForScope().filter((figure) => {
-            const matchesQuery = !query || figure.searchText.includes(query);
+        return scopedFigures.filter((figure, index) => {
+            const figureTags = figure.tags.map((tag) => tag.toLowerCase());
+            const title = figure.title?.toLowerCase() ?? "";
+            const code = figure.searchText.toLowerCase();
+            const cell = String(figure.cellIndex + 1);
+            const figureNumber = String(index + 1);
+            let matchesQuery = !query || code.includes(query);
+
+            if (query.startsWith("title:")) {
+                matchesQuery = title.includes(query.slice(6).trim());
+            } else if (query.startsWith("tags:") || query.startsWith("tag:")) {
+                const separator = query.indexOf(":");
+                const tagQuery = query.slice(separator + 1).trim();
+                matchesQuery = figureTags.includes(tagQuery);
+            } else if (query.startsWith("code:")) {
+                matchesQuery = code.includes(query.slice(5).trim());
+            } else if (query.startsWith("cell:")) {
+                matchesQuery = cell === query.slice(5).trim();
+            } else if (query.startsWith("figure:")) {
+                matchesQuery = figureNumber === query.slice(7).trim();
+            }
             const matchesTags = [...this.activeTags].every((tag) => figure.tags.includes(tag));
             const matchesTitle = this.titleFilter === "all" ||
                 (this.titleFilter === "titled" ? Boolean(figure.title) : !figure.title);
@@ -1142,8 +1647,16 @@ export class FigureExplorerWidget extends Widget {
     }
 
     private headingText(): string {
+        if (this.historySourceKey) {
+            return "Figure history";
+        }
+
         if (this.scope === "all") {
             return "All open notebooks";
+        }
+
+        if (this.scope === "starred") {
+            return "Starred figures";
         }
 
         return this.notebooks.find((notebook) => notebook.uri === this.currentNotebookUri)?.name
@@ -1155,12 +1668,34 @@ export class FigureExplorerWidget extends Widget {
             return "No figures match the current filters.";
         }
 
+        if (this.scope === "starred") {
+            return "No figures have been starred yet.";
+        }
+
+        if (this.historySourceKey) {
+            return "No versions are available for this figure.";
+        }
+
         return this.scope === "all"
-            ? "No PNG figures were found in open notebooks."
-            : "No PNG figures were found in this notebook.";
+            ? "No supported figures were found in open notebooks."
+            : "No supported figures were found in this notebook.";
     }
 
-    private savePng(figures: readonly FigureRecord[]): void {
+    private isStarred(figure: FigureRecord | undefined): boolean {
+        return Boolean(
+            figure && this.starredFigures.some((entry) => entry.figure.id === figure.id)
+        );
+    }
+
+    private setStarred(figures: readonly FigureRecord[], starred: boolean): void {
+        for (const figure of figures) {
+            if (this.isStarred(figure) !== starred) {
+                this.onToggleStar?.(figure);
+            }
+        }
+    }
+
+    private saveImages(figures: readonly FigureRecord[]): void {
         for (const figure of figures) {
             const bytes = imageStore.get(figure.id);
             if (!bytes) {
@@ -1168,7 +1703,7 @@ export class FigureExplorerWidget extends Widget {
             }
             this.download(
                 new Blob([Uint8Array.from(bytes)], { type: figure.mimeType }),
-                this.exportFileName(figure, "png")
+                this.exportFileName(figure, imageExtension(figure.mimeType))
             );
         }
     }
@@ -1208,15 +1743,17 @@ export class FigureExplorerWidget extends Widget {
         const picker = (window as PickerWindow).showSaveFilePicker;
 
         if (!picker) {
-            this.showNotice("Choose PNG or PDF from the figure's right-click menu in this browser.");
+            this.showNotice("Choose Save Image or Export PDF from the figure's right-click menu in this browser.");
             return;
         }
 
         try {
+            const extension = imageExtension(figure.mimeType);
+            const format = imageFormatLabel(figure.mimeType);
             const handle = await picker({
-                suggestedName: this.exportFileName(figure, "png"),
+                suggestedName: this.exportFileName(figure, extension),
                 types: [
-                    { description: "PNG image", accept: { "image/png": [".png"] } },
+                    { description: `${format} image`, accept: { [figure.mimeType]: [`.${extension}`] } },
                     { description: "PDF document", accept: { "application/pdf": [".pdf"] } },
                 ],
             });
@@ -1240,7 +1777,12 @@ export class FigureExplorerWidget extends Widget {
             if (!bytes) {
                 continue;
             }
-            const image = await pdf.embedPng(Uint8Array.from(bytes));
+            const source = Uint8Array.from(bytes);
+            const image = figure.mimeType === "image/jpeg"
+                ? await pdf.embedJpg(source)
+                : figure.mimeType === "image/png"
+                    ? await pdf.embedPng(source)
+                    : await pdf.embedPng(await this.rasterizeToPng(source, figure.mimeType));
             const pageWidth = 595.28;
             const pageHeight = 841.89;
             const margin = 36;
@@ -1271,9 +1813,14 @@ export class FigureExplorerWidget extends Widget {
         try {
             const imageBytes = new Uint8Array(bytes.length);
             imageBytes.set(bytes);
+            const pngBytes = figure.mimeType === "image/png"
+                ? imageBytes
+                : await this.rasterizeToPng(imageBytes, figure.mimeType);
+            const clipboardBytes = new Uint8Array(pngBytes.length);
+            clipboardBytes.set(pngBytes);
             await navigator.clipboard.write([
                 new ClipboardItem({
-                    "image/png": new Blob([imageBytes.buffer], { type: "image/png" }),
+                    "image/png": new Blob([clipboardBytes.buffer], { type: "image/png" }),
                 }),
             ]);
             this.showNotice("Image copied to the clipboard.");
@@ -1299,10 +1846,26 @@ export class FigureExplorerWidget extends Widget {
             });
             menu.append(button);
         };
+        const actionFigures = this.selectedFigureIds.has(figure.id) && this.selectedFigureIds.size > 1
+            ? this.filteredFigures().filter((candidate) => this.selectedFigureIds.has(candidate.id))
+            : [figure];
+        const plural = actionFigures.length > 1;
         addAction("Reveal cell", () => this.onRevealCell(figure));
-        addAction("Save PNG", () => this.savePng([figure]));
-        addAction("Export PDF", () => this.exportPdf([figure]));
+        addAction(plural ? "Save selected images" : "Save Image", () => this.saveImages(actionFigures));
+        addAction(plural ? "Export selected as PDF" : "Export PDF", () => this.exportPdf(actionFigures));
         addAction("Copy image", () => this.copyImage(figure));
+        if (this.historySourceKey) {
+            addAction("View/restore version code…", () => this.showVersionCodePanel(figure));
+            addAction("Copy version code", () => this.copyVersionCode(figure));
+            addAction("Restore cell code…", () => this.restoreVersionCode(figure));
+        }
+        if (!this.historySourceKey) {
+            const shouldStar = actionFigures.some((candidate) => !this.isStarred(candidate));
+            addAction(
+                `${shouldStar ? "Star" : "Unstar"} ${plural ? "selected figures" : "figure"}`,
+                () => this.setStarred(actionFigures, shouldStar)
+            );
+        }
         document.body.append(menu);
         window.setTimeout(() => {
             const closeOnOutsidePointer = (pointerEvent: PointerEvent): void => {
@@ -1315,6 +1878,112 @@ export class FigureExplorerWidget extends Widget {
         });
     }
 
+    private async copyVersionCode(figure: FigureRecord): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(
+                figure.sourceSnapshot ?? figure.cellSource
+            );
+            this.showNotice("Version code copied.");
+        } catch {
+            this.showNotice("Could not copy the version code.");
+        }
+    }
+
+    private restoreVersionCode(figure: FigureRecord): void {
+        if (!this.onRestoreCellSource) {
+            this.showNotice("Open the original notebook to restore this code.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Replace the current code in ${figure.notebookName}, cell ${figure.cellIndex + 1}, with this historical version?`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        if (this.onRestoreCellSource(figure)) {
+            this.showNotice(
+                this.hasClass("jp-mod-externalWindow")
+                    ? "Restore request sent to the notebook window."
+                    : "Cell code restored."
+            );
+        } else {
+            this.showNotice(
+                "Clio could not safely identify the original cell. You can still copy the code."
+            );
+        }
+    }
+
+    private showVersionCodePanel(figure: FigureRecord): void {
+        document.querySelector(".jp-FigureExplorer-versionCodeOverlay")?.remove();
+        const overlay = document.createElement("div");
+        overlay.className = "jp-FigureExplorer-versionCodeOverlay";
+        const panel = document.createElement("section");
+        panel.className = "jp-FigureExplorer-versionCodePanel";
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-modal", "true");
+        panel.setAttribute("aria-label", "Historical cell code");
+        const header = document.createElement("header");
+        const title = document.createElement("h2");
+        const versions = this.figuresForScope();
+        const position = versions.findIndex((candidate) => candidate.id === figure.id) + 1;
+        title.textContent = `Cell code · Version ${Math.max(1, position)}`;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "jp-FigureExplorer-versionCodeClose";
+        close.textContent = "×";
+        close.title = "Close";
+        close.setAttribute("aria-label", "Close code panel");
+        header.append(title, close);
+        const location = document.createElement("p");
+        location.className = "jp-FigureExplorer-versionCodeLocation";
+        location.textContent = `${figure.notebookName} · Cell ${figure.cellIndex + 1}`;
+        const code = document.createElement("pre");
+        code.className = "jp-FigureExplorer-versionCodeSource";
+        const source = figure.sourceSnapshot ?? figure.cellSource;
+        code.textContent = source || "No source code was captured for this version.";
+        const actions = document.createElement("footer");
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.textContent = "Copy code";
+        const restore = document.createElement("button");
+        restore.type = "button";
+        restore.className = "jp-mod-primary";
+        restore.textContent = "Restore to cell";
+        restore.disabled = !source;
+        actions.append(copy, restore);
+        panel.append(header, location, code, actions);
+        overlay.append(panel);
+        document.body.append(overlay);
+
+        const dismiss = (): void => {
+            document.removeEventListener("keydown", onKeyDown, true);
+            overlay.remove();
+        };
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                dismiss();
+            }
+        };
+        close.addEventListener("click", dismiss);
+        overlay.addEventListener("pointerdown", (event) => {
+            if (event.target === overlay) {
+                dismiss();
+            }
+        });
+        copy.addEventListener("click", () => { void this.copyVersionCode(figure); });
+        restore.addEventListener("click", () => {
+            this.restoreVersionCode(figure);
+            dismiss();
+        });
+        document.addEventListener("keydown", onKeyDown, true);
+        close.focus();
+    }
+
     private download(blob: Blob, name: string): void {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -1322,6 +1991,45 @@ export class FigureExplorerWidget extends Widget {
         anchor.download = name;
         anchor.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    private async rasterizeToPng(
+        bytes: Uint8Array,
+        mimeType: string
+    ): Promise<Uint8Array> {
+        const sourceBytes = new Uint8Array(bytes.length);
+        sourceBytes.set(bytes);
+        const url = URL.createObjectURL(
+            new Blob([sourceBytes.buffer], { type: mimeType })
+        );
+
+        try {
+            const image = new Image();
+            image.decoding = "async";
+            image.src = url;
+            await image.decode();
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, image.naturalWidth);
+            canvas.height = Math.max(1, image.naturalHeight);
+            const context = canvas.getContext("2d");
+
+            if (!context) {
+                throw new Error("Canvas rendering is unavailable.");
+            }
+
+            context.drawImage(image, 0, 0);
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, "image/png")
+            );
+
+            if (!blob) {
+                throw new Error("Could not rasterize the image.");
+            }
+
+            return new Uint8Array(await blob.arrayBuffer());
+        } finally {
+            URL.revokeObjectURL(url);
+        }
     }
 
     private focusGallery(): void {
@@ -1367,9 +2075,66 @@ export class FigureExplorerWidget extends Widget {
     }
 
     private findFigure(id: string | undefined): FigureRecord | undefined {
-        return this.notebooks
-            .flatMap((notebook) => notebook.figures)
-            .find((figure) => figure.id === id);
+        return this.figuresForScope().find((figure) => figure.id === id);
+    }
+
+    private createFullscreenButton(viewport: HTMLElement): HTMLButtonElement {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "jp-FigureExplorer-iconButton";
+        button.innerHTML = galleryIcon("fullscreen");
+        button.title = "Focus figure";
+        button.setAttribute("aria-label", "Focus figure");
+        button.addEventListener("pointerdown", (event) => event.stopPropagation());
+        button.addEventListener("click", () => {
+            this.toggleFullscreen(viewport);
+        });
+        return button;
+    }
+
+    private toggleFullscreen(viewport: HTMLElement): void {
+        if (this.fullscreenFigure?.viewport === viewport) {
+            this.exitFigureFullscreen();
+            return;
+        }
+
+        this.exitFigureFullscreen();
+        const parent = viewport.parentNode;
+        if (!parent) {
+            return;
+        }
+
+        const overlay = document.createElement("div");
+        overlay.className = "jp-FigureExplorer-focusOverlay";
+        overlay.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                this.exitFigureFullscreen();
+            }
+        });
+        this.fullscreenFigure = {
+            viewport,
+            parent,
+            nextSibling: viewport.nextSibling,
+            overlay,
+        };
+        document.body.append(overlay);
+        overlay.append(viewport);
+    }
+
+    private exitFigureFullscreen(): void {
+        if (!this.fullscreenFigure) {
+            return;
+        }
+
+        const { viewport, parent, nextSibling, overlay } = this.fullscreenFigure;
+        if (nextSibling?.parentNode === parent) {
+            parent.insertBefore(viewport, nextSibling);
+        } else {
+            parent.appendChild(viewport);
+        }
+        overlay.remove();
+        this.fullscreenFigure = undefined;
     }
 
     private queueThumbnail(figure: FigureRecord, image: HTMLImageElement): void {
@@ -1631,9 +2396,10 @@ export class FigureExplorerWidget extends Widget {
 
     private pruneObjectUrls(): void {
         const figures = new Map(
-            this.notebooks.flatMap((notebook) =>
-                notebook.figures.map((figure) => [figure.id, figure])
-            )
+            [
+                ...this.notebooks.flatMap((notebook) => notebook.figures),
+                ...figureHistoryStore.getEntries().map((entry) => entry.figure),
+            ].map((figure) => [figure.id, figure] as const)
         );
 
         for (const [id, cached] of this.objectUrls) {
@@ -1672,4 +2438,27 @@ export class FigureExplorerWidget extends Widget {
         }
         this.previewCropUrls.clear();
     }
+}
+
+function normalizeGallerySettings(settings: Partial<GallerySettings>): GallerySettings {
+    return {
+        buttonStyle: settings.buttonStyle === "labels" ? "labels" : "icons",
+        thumbnailSize:
+            settings.thumbnailSize === "small" || settings.thumbnailSize === "large"
+                ? settings.thumbnailSize
+                : "medium",
+        compareLayout:
+            settings.compareLayout === "grid" || settings.compareLayout === "stack"
+                ? settings.compareLayout
+                : "auto",
+    };
+}
+
+function sameGallerySettings(
+    left: GallerySettings,
+    right: GallerySettings
+): boolean {
+    return left.buttonStyle === right.buttonStyle &&
+        left.thumbnailSize === right.thumbnailSize &&
+        left.compareLayout === right.compareLayout;
 }

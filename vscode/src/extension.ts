@@ -1,8 +1,18 @@
 import * as vscode from "vscode";
 import { scanNotebookCommand } from "./commands/scanNotebook";
-import { FigureRecord, NotebookFigures } from "../../shared/notebook/types";
+import {
+    FigureRecord,
+    NotebookFigures,
+    StarredFigureRecord,
+} from "../../shared/notebook/types";
+import {
+    figureMetadataSignature,
+    updateCellFigureMetadata,
+} from "../../shared/notebook/scanner";
+import { figureHistoryStore } from "../../shared/registry/figureHistoryStore";
 import { scanNotebookDocument } from "./notebook/scanner";
 import { figureRegistry } from "../../shared/registry/figureRegistry";
+import { imageStore } from "../../shared/registry/imageStore";
 import { FigureGalleryViewProvider } from "./gallery/figureGalleryView";
 import {
     FigureTreeItem,
@@ -14,13 +24,61 @@ import {
 } from "./commands/figureActions";
 
 const refreshDelayMs = 300;
+const starredFiguresStorageKey = "clio.starredFigures";
 let lastNotebookEditorColumn: vscode.ViewColumn | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
     const provider = new FigureTreeProvider();
-    const gallery = new FigureGalleryViewProvider((figure: FigureRecord) => {
-        void revealNotebookCell(figure);
-    });
+    let starredFigures = normalizeStarredFigures(
+        context.workspaceState.get<unknown>(starredFiguresStorageKey)
+    );
+    const persistStarredFigures = async (): Promise<void> => {
+        await context.workspaceState.update(starredFiguresStorageKey, starredFigures);
+    };
+    const toggleStarredFigure = async (figure: FigureRecord): Promise<void> => {
+        const existingIndex = starredFigures.findIndex(
+            (entry) => entry.figure.id === figure.id
+        );
+
+        if (existingIndex >= 0) {
+            starredFigures = starredFigures.filter((_, index) => index !== existingIndex);
+        } else {
+            starredFigures = [
+                ...starredFigures,
+                { figure: cloneFigure(figure), starredAt: Date.now() },
+            ];
+        }
+
+        await persistStarredFigures();
+    };
+    const refreshStarredSnapshots = async (
+        figures: readonly FigureRecord[]
+    ): Promise<void> => {
+        const current = new Map(figures.map((figure) => [figure.id, figure]));
+        let changed = false;
+        starredFigures = starredFigures.map((entry) => {
+            const figure = current.get(entry.figure.id);
+
+            if (!figure || sameFigureSnapshot(entry.figure, figure)) {
+                return entry;
+            }
+
+            changed = true;
+            return { ...entry, figure: cloneFigure(figure) };
+        });
+
+        if (changed) {
+            await persistStarredFigures();
+        }
+    };
+    const gallery = new FigureGalleryViewProvider(
+        (figure: FigureRecord) => {
+            void revealNotebookCell(figure);
+        },
+        () => starredFigures,
+        toggleStarredFigure,
+        restoreNotebookCellSource
+    );
 
     const treeView = vscode.window.createTreeView("figureExplorer.figures", {
         treeDataProvider: provider,
@@ -28,6 +86,8 @@ export function activate(context: vscode.ExtensionContext): void {
     });
 
     const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+    const pendingMetadataRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+    const metadataSignatures = new Map<string, string>();
 
     const isJupyterNotebook = (document: vscode.NotebookDocument): boolean =>
         document.uri.path.toLowerCase().endsWith(".ipynb");
@@ -53,6 +113,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const notebookUri = document.uri.toString();
         const notebookName = fileName(document.uri);
+        const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
+        const previousImages = new Map(
+            previousFigures.flatMap((figure) => {
+                const bytes = imageStore.get(figure.id);
+                return bytes
+                    ? [[figure.id, Uint8Array.from(bytes)] as const]
+                    : [];
+            })
+        );
 
         let figures: FigureRecord[];
 
@@ -70,7 +139,14 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
         }
 
+        figureHistoryStore.captureChanges(
+            previousFigures,
+            figures,
+            previousImages
+        );
         figureRegistry.setNotebook(notebookUri, notebookName, figures);
+        await refreshStarredSnapshots(figures);
+        cacheNotebookMetadata(document);
         provider.refresh();
 
         const notebook = figureRegistry.getNotebook(notebookUri);
@@ -97,6 +173,88 @@ export function activate(context: vscode.ExtensionContext): void {
             setTimeout(() => {
                 pendingRefreshes.delete(notebookUri);
                 void updateNotebook(document);
+            }, refreshDelayMs)
+        );
+    };
+
+    const cacheNotebookMetadata = (document: vscode.NotebookDocument): void => {
+        const prefix = `${document.uri.toString()}::`;
+
+        for (const key of metadataSignatures.keys()) {
+            if (key.startsWith(prefix)) {
+                metadataSignatures.delete(key);
+            }
+        }
+
+        for (const [cellIndex, cell] of document.getCells().entries()) {
+            metadataSignatures.set(
+                metadataSignatureKey(document.uri.toString(), cellIndex),
+                figureMetadataSignature(cell.document.getText())
+            );
+        }
+    };
+
+    const updateCellMetadata = (textDocument: vscode.TextDocument): void => {
+        for (const document of vscode.workspace.notebookDocuments) {
+            if (!isJupyterNotebook(document)) {
+                continue;
+            }
+
+            const cellIndex = document.getCells().findIndex(
+                (cell) => cell.document.uri.toString() === textDocument.uri.toString()
+            );
+
+            if (cellIndex < 0) {
+                continue;
+            }
+
+            const notebookUri = document.uri.toString();
+            const signatureKey = metadataSignatureKey(notebookUri, cellIndex);
+            const signature = figureMetadataSignature(textDocument.getText());
+
+            if (metadataSignatures.get(signatureKey) === signature) {
+                return;
+            }
+
+            metadataSignatures.set(signatureKey, signature);
+            const registered = figureRegistry.getNotebook(notebookUri);
+
+            if (!registered) {
+                void updateNotebook(document);
+                return;
+            }
+
+            const figures = updateCellFigureMetadata(
+                registered.figures,
+                cellIndex,
+                textDocument.getText(),
+                registered.name
+            );
+            figureRegistry.setNotebook(notebookUri, registered.name, figures);
+            void refreshStarredSnapshots(figures);
+            provider.refresh();
+
+            const updated = figureRegistry.getNotebook(notebookUri);
+            if (updated) {
+                gallery.refreshIfShowing(updated);
+            }
+            return;
+        }
+    };
+
+    const scheduleMetadataUpdate = (textDocument: vscode.TextDocument): void => {
+        const key = textDocument.uri.toString();
+        const existing = pendingMetadataRefreshes.get(key);
+
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        pendingMetadataRefreshes.set(
+            key,
+            setTimeout(() => {
+                pendingMetadataRefreshes.delete(key);
+                updateCellMetadata(textDocument);
             }, refreshDelayMs)
         );
     };
@@ -206,6 +364,9 @@ export function activate(context: vscode.ExtensionContext): void {
                 scheduleUpdate(event.notebook);
             }
         }),
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            scheduleMetadataUpdate(event.document);
+        }),
         vscode.window.onDidChangeActiveNotebookEditor((editor) => {
             followActiveNotebook(editor);
         }),
@@ -220,6 +381,19 @@ export function activate(context: vscode.ExtensionContext): void {
             if (pending) {
                 clearTimeout(pending);
                 pendingRefreshes.delete(notebookUri);
+            }
+
+            const metadataPrefix = `${notebookUri}::`;
+            for (const [key, timer] of pendingMetadataRefreshes) {
+                if (key.startsWith(metadataPrefix)) {
+                    clearTimeout(timer);
+                    pendingMetadataRefreshes.delete(key);
+                }
+            }
+            for (const key of metadataSignatures.keys()) {
+                if (key.startsWith(metadataPrefix)) {
+                    metadataSignatures.delete(key);
+                }
             }
 
             figureRegistry.removeNotebook(notebookUri);
@@ -239,6 +413,7 @@ export function activate(context: vscode.ExtensionContext): void {
         {
             dispose: () => {
                 pendingRefreshes.forEach((timer) => clearTimeout(timer));
+                pendingMetadataRefreshes.forEach((timer) => clearTimeout(timer));
             },
         }
     );
@@ -299,8 +474,113 @@ async function revealNotebookCell(
     }
 }
 
+async function restoreNotebookCellSource(figure: FigureRecord): Promise<boolean> {
+    const source = figure.sourceSnapshot ?? figure.cellSource;
+    const notebook = vscode.workspace.notebookDocuments.find(
+        (document) => document.uri.toString() === figure.notebookUri
+    );
+
+    if (!notebook) {
+        void vscode.window.showWarningMessage(
+            "Open the original notebook before restoring this version's code."
+        );
+        return false;
+    }
+
+    const cells = notebook.getCells();
+    const cell = figure.cellId
+        ? cells.find((candidate) => candidate.document.uri.toString() === figure.cellId)
+        : cells[figure.cellIndex];
+
+    if (!cell) {
+        void vscode.window.showWarningMessage(
+            "Clio could not safely identify the original cell. You can still copy the historical code."
+        );
+        return false;
+    }
+
+    if (cell.document.getText() === source) {
+        return true;
+    }
+
+    const choice = await vscode.window.showWarningMessage(
+        `Replace the current code in ${figure.notebookName}, cell ${cell.index + 1}, with this historical version?`,
+        { modal: true },
+        "Restore Code"
+    );
+
+    if (choice !== "Restore Code") {
+        return false;
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+        cell.document.uri,
+        new vscode.Range(
+            cell.document.positionAt(0),
+            cell.document.positionAt(cell.document.getText().length)
+        ),
+        source
+    );
+
+    if (!await vscode.workspace.applyEdit(edit)) {
+        void vscode.window.showErrorMessage("Clio could not restore the cell code.");
+        return false;
+    }
+
+    await revealNotebookCell({ ...figure, cellIndex: cell.index });
+    return true;
+}
+
 function fileName(uri: vscode.Uri): string {
     return uri.path.split("/").pop() ?? uri.toString();
+}
+
+function metadataSignatureKey(notebookUri: string, cellIndex: number): string {
+    return `${notebookUri}::${cellIndex}`;
+}
+
+function normalizeStarredFigures(value: unknown): StarredFigureRecord[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") {
+            return [];
+        }
+
+        const candidate = entry as Partial<StarredFigureRecord>;
+        const figure = candidate.figure;
+
+        if (
+            !figure ||
+            typeof figure.id !== "string" ||
+            typeof figure.notebookUri !== "string" ||
+            typeof figure.notebookName !== "string"
+        ) {
+            return [];
+        }
+
+        return [{
+            figure: cloneFigure(figure),
+            starredAt: typeof candidate.starredAt === "number"
+                ? candidate.starredAt
+                : Date.now(),
+        }];
+    });
+}
+
+function cloneFigure(figure: FigureRecord): FigureRecord {
+    return { ...figure, tags: [...figure.tags] };
+}
+
+function sameFigureSnapshot(left: FigureRecord, right: FigureRecord): boolean {
+    return left.version === right.version &&
+        left.mimeType === right.mimeType &&
+        left.title === right.title &&
+        left.searchText === right.searchText &&
+        left.tags.join("\u0000") === right.tags.join("\u0000");
 }
 
 export function deactivate(): void {}

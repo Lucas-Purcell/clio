@@ -46,7 +46,7 @@ export class FigureExplorerSidebar extends Widget {
 
         if (this.notebooks.length === 0) {
             const empty = document.createElement("p");
-            empty.textContent = "Open a notebook to discover its PNG figures.";
+            empty.textContent = "Open a notebook to discover its figures.";
             empty.className = "jp-FigureExplorer-empty";
             this.node.append(empty);
             return;

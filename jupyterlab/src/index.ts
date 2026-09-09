@@ -6,20 +6,31 @@ import { ICommandPalette, MainAreaWidget } from "@jupyterlab/apputils";
 import { IDefaultFileBrowser } from "@jupyterlab/filebrowser";
 import { INotebookTracker, NotebookPanel } from "@jupyterlab/notebook";
 import {
+    FigureHistoryEntry,
     FigureRecord,
+    figureHistoryStore,
     imageStore,
     NotebookFigures,
     figureRegistry,
+    StarredFigureRecord,
 } from "@clio/shared";
 import { FigureExplorerSidebar } from "./figureExplorerSidebar";
-import { FigureExplorerWidget } from "./figureExplorerWidget";
+import {
+    defaultGallerySettings,
+    FigureExplorerWidget,
+    GallerySettings,
+} from "./figureExplorerWidget";
 import { clioIcon } from "./icon";
 import {
     figureImageInputs,
+    figureMetadataInputs,
     notebookJson,
     sameFigureImageInputs,
+    sameFigureMetadataInputs,
     scanNotebookJson,
+    updateChangedFigureMetadata,
     type FigureImageInput,
+    type FigureMetadataInput,
 } from "./notebookScanner";
 import "../style/index.css";
 
@@ -29,6 +40,57 @@ const openGalleryInNewWindowCommand = "figure-explorer:open-gallery-in-new-windo
 const refreshGalleryCommand = "figure-explorer:refresh-gallery";
 const galleryWindowQuery = "figureExplorerGallery";
 const galleryWindowSourceQuery = "figureExplorerSource";
+const gallerySettingsStorageKey = "clio:gallery-settings";
+const starredFiguresStorageKey = "clio:starred-figures";
+
+function readStarredFigures(): StarredFigureRecord[] {
+    try {
+        const stored = JSON.parse(
+            window.localStorage.getItem(starredFiguresStorageKey) ?? "[]"
+        ) as unknown;
+
+        if (!Array.isArray(stored)) {
+            return [];
+        }
+
+        return stored.filter((entry): entry is StarredFigureRecord => {
+            if (!entry || typeof entry !== "object") {
+                return false;
+            }
+
+            const candidate = entry as Partial<StarredFigureRecord>;
+            return Boolean(
+                candidate.figure &&
+                typeof candidate.figure.id === "string" &&
+                typeof candidate.starredAt === "number"
+            );
+        });
+    } catch {
+        return [];
+    }
+}
+
+function readGallerySettings(): GallerySettings {
+    try {
+        const stored = JSON.parse(
+            window.localStorage.getItem(gallerySettingsStorageKey) ?? "{}"
+        ) as Partial<GallerySettings>;
+
+        return {
+            buttonStyle: stored.buttonStyle === "labels" ? "labels" : "icons",
+            thumbnailSize:
+                stored.thumbnailSize === "small" || stored.thumbnailSize === "large"
+                    ? stored.thumbnailSize
+                    : "medium",
+            compareLayout:
+                stored.compareLayout === "grid" || stored.compareLayout === "stack"
+                    ? stored.compareLayout
+                    : "auto",
+        };
+    } catch {
+        return defaultGallerySettings;
+    }
+}
 
 function galleryWindowSourceId(): string | undefined {
     const fromQuery = new URLSearchParams(window.location.search)
@@ -47,8 +109,11 @@ function galleryWindowSourceId(): string | undefined {
 interface GalleryWindowCatalog {
     type: "catalog";
     notebooks: readonly NotebookFigures[];
-    images: readonly { id: string; data: string }[];
+    images?: readonly { id: string; data: string }[];
+    history: readonly FigureHistoryEntry[];
     currentNotebookUri?: string;
+    settings: GallerySettings;
+    starredFigures: readonly StarredFigureRecord[];
 }
 
 interface GalleryWindowReady {
@@ -74,13 +139,31 @@ interface GalleryWindowClosed {
     type: "closed";
 }
 
+interface GalleryWindowSettings {
+    type: "settings";
+    settings: GallerySettings;
+}
+
+interface GalleryWindowToggleStar {
+    type: "toggleStar";
+    figure: FigureRecord;
+}
+
+interface GalleryWindowRestoreCode {
+    type: "restoreCode";
+    figure: FigureRecord;
+}
+
 type GalleryWindowMessage =
     | GalleryWindowCatalog
     | GalleryWindowReady
     | GalleryWindowReveal
     | GalleryWindowSelect
     | GalleryWindowShowNotebook
-    | GalleryWindowClosed;
+    | GalleryWindowClosed
+    | GalleryWindowSettings
+    | GalleryWindowToggleStar
+    | GalleryWindowRestoreCode;
 
 function encodeImage(bytes: Readonly<Uint8Array>): string {
     const chunkSize = 8192;
@@ -106,7 +189,7 @@ function decodeImage(data: string): Uint8Array {
 
 const plugin: JupyterFrontEndPlugin<void> = {
     id: "@clio/jupyter:plugin",
-    description: "Clio: browse PNG figures generated in Jupyter notebooks.",
+    description: "Clio: browse figures generated in Jupyter notebooks.",
     autoStart: true,
     requires: [INotebookTracker, IDefaultFileBrowser],
     optional: [ICommandPalette],
@@ -115,11 +198,54 @@ const plugin: JupyterFrontEndPlugin<void> = {
         let sideGallery: FigureExplorerWidget | undefined;
         let refreshTimer: ReturnType<typeof setTimeout> | undefined;
         const notebookImageInputs = new Map<string, readonly FigureImageInput[]>();
+        const notebookMetadataInputs = new Map<string, readonly FigureMetadataInput[]>();
         let galleryWindowChannel: BroadcastChannel | undefined;
         let externalGalleryWindow: Window | null | undefined;
         let externalGalleryConnected = false;
+        let gallerySettings = readGallerySettings();
+        let starredFigures = readStarredFigures();
         const popupSourceId = galleryWindowSourceId();
         const isExternalGallery = Boolean(popupSourceId || window.opener);
+
+        const persistStarredFigures = (): void => {
+            try {
+                window.localStorage.setItem(
+                    starredFiguresStorageKey,
+                    JSON.stringify(starredFigures)
+                );
+            } catch {
+                // Keep stars available for this session if browser storage is blocked.
+            }
+        };
+
+        const cloneFigure = (figure: FigureRecord): FigureRecord => ({
+            ...figure,
+            tags: [...figure.tags],
+        });
+
+        const refreshStarredSnapshots = (figures: readonly FigureRecord[]): void => {
+            const current = new Map(figures.map((figure) => [figure.id, figure]));
+            let changed = false;
+            starredFigures = starredFigures.map((entry) => {
+                const figure = current.get(entry.figure.id);
+
+                if (!figure || (
+                    entry.figure.version === figure.version &&
+                    entry.figure.title === figure.title &&
+                    entry.figure.searchText === figure.searchText &&
+                    JSON.stringify(entry.figure.tags) === JSON.stringify(figure.tags)
+                )) {
+                    return entry;
+                }
+
+                changed = true;
+                return { ...entry, figure: cloneFigure(figure) };
+            });
+
+            if (changed) {
+                persistStarredFigures();
+            }
+        };
 
         const getActiveNotebook = (): NotebookPanel | undefined =>
             notebooks.currentWidget ?? undefined;
@@ -153,6 +279,18 @@ const plugin: JupyterFrontEndPlugin<void> = {
             const panel = focusNotebook(figure.notebookUri);
 
             if (!panel) {
+                void app.commands.execute("docmanager:open", {
+                    path: figure.notebookUri,
+                }).then(() => {
+                    window.setTimeout(() => {
+                        const opened = focusNotebook(figure.notebookUri);
+                        if (opened) {
+                            opened.content.activeCellIndex = figure.cellIndex;
+                            (opened.content as unknown as { scrollToItem?(index: number): void })
+                                .scrollToItem?.(figure.cellIndex);
+                        }
+                    }, 150);
+                });
                 return;
             }
 
@@ -161,25 +299,121 @@ const plugin: JupyterFrontEndPlugin<void> = {
                 .scrollToItem?.(figure.cellIndex);
         };
 
-        const scanNotebook = (panel: NotebookPanel, force = false): boolean => {
-            const notebookUri = panel.context.path;
-            const notebookName = notebookUri.split("/").pop() ?? notebookUri;
-            const notebook = notebookJson(panel.context.model);
-            const inputs = figureImageInputs(notebook);
+        const restoreCellSource = (figure: FigureRecord): boolean => {
+            if (popupSourceId && galleryWindowChannel) {
+                galleryWindowChannel.postMessage({
+                    type: "restoreCode",
+                    figure,
+                } satisfies GalleryWindowRestoreCode);
+                return true;
+            }
 
-            if (!force && sameFigureImageInputs(notebookImageInputs.get(notebookUri), inputs)) {
+            const panel = focusNotebook(figure.notebookUri);
+            const cells = panel?.content.model?.cells;
+            const source = figure.sourceSnapshot ?? figure.cellSource;
+
+            if (!panel || !cells) {
+                window.alert(
+                    "Open the original notebook before restoring this version's code."
+                );
                 return false;
             }
 
-            const figures = scanNotebookJson(
-                notebook,
-                notebookUri,
-                notebookName
+            let cellIndex = -1;
+
+            if (figure.cellId) {
+                for (let index = 0; index < cells.length; index += 1) {
+                    if (cells.get(index).id === figure.cellId) {
+                        cellIndex = index;
+                        break;
+                    }
+                }
+            } else if (figure.cellIndex >= 0 && figure.cellIndex < cells.length) {
+                cellIndex = figure.cellIndex;
+            }
+
+            if (cellIndex < 0) {
+                window.alert(
+                    "Clio could not safely identify the original cell. You can still copy the historical code."
+                );
+                return false;
+            }
+
+            const cell = cells.get(cellIndex);
+            panel.context.model.sharedModel.transact(() => {
+                cell.sharedModel.setSource(source);
+            }, true);
+            panel.content.activeCellIndex = cellIndex;
+            (panel.content as unknown as { scrollToItem?(index: number): void })
+                .scrollToItem?.(cellIndex);
+            return true;
+        };
+
+        const scanNotebook = (
+            panel: NotebookPanel,
+            force = false
+        ): "none" | "images" | "metadata" => {
+            const notebookUri = panel.context.path;
+            const notebookName = notebookUri.split("/").pop() ?? notebookUri;
+            const notebook = notebookJson(panel.context.model);
+            const imageInputs = figureImageInputs(notebook);
+            const metadataInputs = figureMetadataInputs(notebook);
+            const imagesChanged = force || !sameFigureImageInputs(
+                notebookImageInputs.get(notebookUri),
+                imageInputs
+            );
+            const metadataChanged = !sameFigureMetadataInputs(
+                notebookMetadataInputs.get(notebookUri),
+                metadataInputs
             );
 
+            if (!imagesChanged && !metadataChanged) {
+                return "none";
+            }
+
+            if (imagesChanged) {
+                const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
+                const previousImages = new Map(
+                    previousFigures.flatMap((figure) => {
+                        const bytes = imageStore.get(figure.id);
+                        return bytes
+                            ? [[figure.id, Uint8Array.from(bytes)] as const]
+                            : [];
+                    })
+                );
+                const figures = scanNotebookJson(
+                    notebook,
+                    notebookUri,
+                    notebookName
+                );
+
+                figureHistoryStore.captureChanges(
+                    previousFigures,
+                    figures,
+                    previousImages
+                );
+                figureRegistry.setNotebook(notebookUri, notebookName, figures);
+                refreshStarredSnapshots(figures);
+                notebookImageInputs.set(notebookUri, imageInputs);
+                notebookMetadataInputs.set(notebookUri, metadataInputs);
+                return "images";
+            }
+
+            const registered = figureRegistry.getNotebook(notebookUri);
+            if (!registered) {
+                return "none";
+            }
+
+            const figures = updateChangedFigureMetadata(
+                registered.figures,
+                notebookMetadataInputs.get(notebookUri),
+                metadataInputs,
+                notebookName
+            );
             figureRegistry.setNotebook(notebookUri, notebookName, figures);
-            notebookImageInputs.set(notebookUri, inputs);
-            return true;
+            refreshStarredSnapshots(figures);
+            notebookMetadataInputs.set(notebookUri, metadataInputs);
+            return "metadata";
         };
 
         const scanOpenNotebooks = (): void => {
@@ -192,45 +426,117 @@ const plugin: JupyterFrontEndPlugin<void> = {
             externalGalleryConnected &&
             (!externalGalleryWindow || !externalGalleryWindow.closed);
 
+        const applyGallerySettings = (
+            settings: GallerySettings,
+            broadcast = true
+        ): void => {
+            gallerySettings = settings;
+
+            try {
+                window.localStorage.setItem(
+                    gallerySettingsStorageKey,
+                    JSON.stringify(gallerySettings)
+                );
+            } catch {
+                // Settings remain available for this session when browser storage is unavailable.
+            }
+
+            if (gallery && !gallery.isDisposed) {
+                gallery.content.setSettings(gallerySettings);
+            }
+
+            if (sideGallery && !sideGallery.isDisposed) {
+                sideGallery.setSettings(gallerySettings);
+            }
+
+            if (broadcast && galleryWindowChannel) {
+                galleryWindowChannel.postMessage({
+                    type: "settings",
+                    settings: gallerySettings,
+                } satisfies GalleryWindowSettings);
+            }
+        };
+
         const sendGalleryWindowCatalog = (
-            current = getActiveNotebook()
+            current = getActiveNotebook(),
+            includeImages = true
         ): void => {
             if (!galleryWindowChannel || popupSourceId) {
                 return;
             }
 
             const notebooks = figureRegistry.getNotebooks();
-            const images = notebooks.flatMap((notebook) =>
-                notebook.figures.flatMap((figure) => {
+            const history = figureHistoryStore.getEntries();
+            const imageRecords = includeImages
+                ? [
+                    ...notebooks.flatMap((notebook) => notebook.figures),
+                    ...history.map((entry) => entry.figure),
+                ]
+                : [];
+            const images = includeImages
+                ? [...new Map(imageRecords.map((figure) => {
                     const bytes = imageStore.get(figure.id);
-                    return bytes
-                        ? [{ id: figure.id, data: encodeImage(bytes) }]
-                        : [];
-                })
-            );
+                    return [
+                        figure.id,
+                        bytes ? { id: figure.id, data: encodeImage(bytes) } : undefined,
+                    ] as const;
+                })).values()].filter(
+                    (image): image is { id: string; data: string } => image !== undefined
+                )
+                : undefined;
 
             const message: GalleryWindowCatalog = {
                 type: "catalog",
                 notebooks,
                 images,
+                history,
                 currentNotebookUri: current?.context.path,
+                settings: gallerySettings,
+                starredFigures,
             };
             galleryWindowChannel.postMessage(message);
         };
 
-        const updateViews = (current = getActiveNotebook()): void => {
+        const updateViews = (
+            current = getActiveNotebook(),
+            includeImages = true
+        ): void => {
             const allNotebooks = figureRegistry.getNotebooks();
             sidebar?.setNotebooks(allNotebooks);
 
             if (gallery && !gallery.isDisposed) {
                 gallery.content.setNotebooks(allNotebooks, current?.context.path);
+                gallery.content.setStarredFigures(starredFigures);
             }
 
             if (sideGallery && !sideGallery.isDisposed) {
                 sideGallery.setNotebooks(allNotebooks, current?.context.path);
+                sideGallery.setStarredFigures(starredFigures);
             }
 
-            sendGalleryWindowCatalog(current);
+            sendGalleryWindowCatalog(current, includeImages);
+        };
+
+        const toggleStarredFigure = (figure: FigureRecord): void => {
+            if (popupSourceId && galleryWindowChannel) {
+                galleryWindowChannel.postMessage({
+                    type: "toggleStar",
+                    figure,
+                } satisfies GalleryWindowToggleStar);
+                return;
+            }
+
+            const existing = starredFigures.some(
+                (entry) => entry.figure.id === figure.id
+            );
+            starredFigures = existing
+                ? starredFigures.filter((entry) => entry.figure.id !== figure.id)
+                : [...starredFigures, {
+                    figure: cloneFigure(figure),
+                    starredAt: Date.now(),
+                }];
+            persistStarredFigures();
+            updateViews(undefined, false);
         };
 
         const refreshGallery = (force = false): void => {
@@ -250,14 +556,14 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
             refreshTimer = setTimeout(() => {
                 refreshTimer = undefined;
-                let changed = false;
+                let change: "none" | "images" | "metadata" = "none";
 
                 if (changedPanel && !changedPanel.isDisposed) {
-                    changed = scanNotebook(changedPanel);
+                    change = scanNotebook(changedPanel);
                 }
 
-                if (changed) {
-                    updateViews();
+                if (change !== "none") {
+                    updateViews(undefined, change === "images");
                 }
             }, 150);
         };
@@ -268,7 +574,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
             panel.context.model.contentChanged.connect(() => scheduleRefresh(panel));
             panel.disposed.connect(() => {
                 figureRegistry.removeNotebook(panel.context.path);
+                imageStore.clearNotebook(panel.context.path);
                 notebookImageInputs.delete(panel.context.path);
+                notebookMetadataInputs.delete(panel.context.path);
                 updateViews();
             });
         };
@@ -279,7 +587,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
                     content: new FigureExplorerWidget(
                         revealCell,
                         popupSourceId ? "all" : "notebook",
-                        isExternalGallery
+                        isExternalGallery,
+                        gallerySettings,
+                        applyGallerySettings,
+                        starredFigures,
+                        toggleStarredFigure,
+                        restoreCellSource
                     ),
                 });
                 gallery.id = "figure-explorer:gallery";
@@ -296,7 +609,16 @@ const plugin: JupyterFrontEndPlugin<void> = {
 
         const ensureSideGallery = (): FigureExplorerWidget => {
             if (!sideGallery || sideGallery.isDisposed) {
-                sideGallery = new FigureExplorerWidget(revealCell);
+                sideGallery = new FigureExplorerWidget(
+                    revealCell,
+                    "notebook",
+                    false,
+                    gallerySettings,
+                    applyGallerySettings,
+                    starredFigures,
+                    toggleStarredFigure,
+                    restoreCellSource
+                );
                 sideGallery.id = "figure-explorer:gallery-sidebar";
                 sideGallery.title.label = "Clio";
                 sideGallery.title.icon = clioIcon;
@@ -411,6 +733,21 @@ const plugin: JupyterFrontEndPlugin<void> = {
                 return;
             }
 
+            if (message.type === "settings") {
+                applyGallerySettings(message.settings, false);
+                return;
+            }
+
+            if (message.type === "toggleStar" && !popupSourceId) {
+                toggleStarredFigure(message.figure);
+                return;
+            }
+
+            if (message.type === "restoreCode" && !popupSourceId) {
+                restoreCellSource(message.figure);
+                return;
+            }
+
             if (message.type !== "catalog" || !popupSourceId) {
                 return;
             }
@@ -418,7 +755,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
             for (const notebook of figureRegistry.getNotebooks()) {
                 figureRegistry.removeNotebook(notebook.uri);
             }
-            imageStore.clear();
+            if (message.images) {
+                figureHistoryStore.clear();
+                imageStore.clear();
+            }
 
             for (const notebook of message.notebooks) {
                 figureRegistry.setNotebook(
@@ -428,9 +768,13 @@ const plugin: JupyterFrontEndPlugin<void> = {
                 );
             }
 
-            for (const image of message.images) {
+            for (const image of message.images ?? []) {
                 imageStore.put(image.id, decodeImage(image.data));
             }
+            figureHistoryStore.replace(message.history);
+
+            applyGallerySettings(message.settings, false);
+            starredFigures = [...message.starredFigures];
 
             const allNotebooks = figureRegistry.getNotebooks();
             sidebar?.setNotebooks(allNotebooks);
@@ -439,12 +783,14 @@ const plugin: JupyterFrontEndPlugin<void> = {
                     allNotebooks,
                     message.currentNotebookUri
                 );
+                gallery.content.setStarredFigures(starredFigures);
             }
             if (sideGallery && !sideGallery.isDisposed) {
                 sideGallery.setNotebooks(
                     allNotebooks,
                     message.currentNotebookUri
                 );
+                sideGallery.setStarredFigures(starredFigures);
             }
         };
 
@@ -535,7 +881,14 @@ const plugin: JupyterFrontEndPlugin<void> = {
             execute: () => refreshGallery(),
         });
 
-        notebooks.currentChanged.connect(() => scheduleRefresh());
+        notebooks.currentChanged.connect((_: INotebookTracker, current: NotebookPanel | null) => {
+            if (popupSourceId) {
+                return;
+            }
+
+            const change = current ? scanNotebook(current) : "none";
+            updateViews(current ?? undefined, change === "images");
+        });
 
         palette?.addItem({ command: openGalleryCommand, category: "Notebook" });
         palette?.addItem({

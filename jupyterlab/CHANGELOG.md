@@ -2,6 +2,33 @@
 
 All notable changes to Clio for JupyterLab are documented in this file.
 
+## [0.1.17] - 2026-08-26
+
+### Added
+
+- Added Focus Figure to gallery previews and comparison figures in the side panel, tab, and separate-window layouts.
+- Added a Gallery settings menu for button labels, fixed thumbnail size, and comparison layout preferences shared by the side panel, tab, and external window.
+- Added JPEG, WebP, and SVG discovery, previews, original-format downloads, PDF export, and PNG clipboard conversion alongside PNG figures.
+- Added browser-persistent starred figures with a dedicated Starred gallery scope, thumbnail markers, preview and context actions, and retained metadata for figures in closed notebooks.
+- Added session-only figure history in the side panel, tab, and separate window, with version navigation, comparison, copying, export, and Escape-based history exit.
+- Added history-version code viewing, copying, and safe restoration with stable cell targeting and normal notebook Undo support.
+
+### Changed
+
+- Update figure titles and tags immediately when their notebook metadata comments change, without rescanning or reloading image data.
+- Apply toolbar and context-menu save, PDF export, and star/unstar actions to all selected thumbnails.
+- Update This notebook mode immediately when the active JupyterLab notebook changes.
+
+### Fixed
+
+- Render Tags, Filters, and Settings menus in an unclipped application-level popup layer in side-panel, tab, and separate-window galleries.
+- Support `title:`, `tag:`/`tags:`, `code:`, `cell:`, and `figure:` search qualifiers.
+- Replaced browser fullscreen requests that embedded hosts may block with a reliable in-gallery focus mode; press Escape to restore the regular gallery.
+- Kept Gallery controls and dropdown menus within narrow or resized panel bounds.
+- Preserve the previous plot across the transient output-clearing stage of a cell rerun, so the history clock activates for the replacement output.
+- Keep history-version images in the lazy thumbnail catalog so their thumbnails remain visible while browsing history.
+- Keep the focused figure view open when moving between history versions with the preview arrows.
+
 ## [0.1.16] - 2026-08-17
 
 ### Fixed

@@ -101,6 +101,7 @@ ${css}
                 type="button"
                 title="Add tag filter"
                 aria-label="Add tag filter"
+                data-button-label="Add tag"
             >
                 ${tagIcon}
             </button>
@@ -117,6 +118,11 @@ ${css}
             <button class="control scope" data-scope="all" title="All open notebooks" aria-label="All open notebooks">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h11a2 2 0 0 1 2 2v13H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M5 7H3v13a2 2 0 0 0 2 2h11"/></svg>
                 <span class="scope-label">All open</span>
+            </button>
+
+            <button class="control scope" data-scope="starred" title="Starred figures" aria-label="Starred figures">
+                <svg class="star-scope-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>
+                <span class="scope-label">Starred</span>
             </button>
         </div>
 
@@ -144,15 +150,54 @@ ${css}
                 </button>
             </div>
         </div>
+
+        <div class="settings-menu">
+            <button
+                id="settings-button"
+                class="control icon-button"
+                type="button"
+                title="Gallery settings"
+                aria-label="Gallery settings"
+                data-button-label="Settings"
+            >⚙</button>
+
+            <div id="settings-panel" class="settings-panel" hidden>
+                <div class="settings-group">
+                    <span class="settings-label">Buttons</span>
+                    <div class="settings-options">
+                        <button type="button" data-setting="buttonStyle" data-value="icons">Icons</button>
+                        <button type="button" data-setting="buttonStyle" data-value="labels">Labels</button>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <span class="settings-label">Thumbnails</span>
+                    <div class="settings-options">
+                        <button type="button" data-setting="thumbnailSize" data-value="small">Small</button>
+                        <button type="button" data-setting="thumbnailSize" data-value="medium">Medium</button>
+                        <button type="button" data-setting="thumbnailSize" data-value="large">Large</button>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <span class="settings-label">Compare</span>
+                    <div class="settings-options">
+                        <button type="button" data-setting="compareLayout" data-value="auto">Auto</button>
+                        <button type="button" data-setting="compareLayout" data-value="grid">Grid</button>
+                        <button type="button" data-setting="compareLayout" data-value="stack">Stack</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="result-row">
         <span id="count">0 figures</span>
 
         <div class="result-actions">
-            <button id="compare" disabled title="Compare selected figures" aria-label="Compare selected figures">⇄</button>
-            <button id="download-selected" disabled title="Download selected figure" aria-label="Download selected figure"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg></button>
-            <button id="reveal" disabled title="Reveal cell" aria-label="Reveal cell"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 12h8M12 8v8"/></svg></button>
+            <button id="exit-history" hidden title="Exit figure history" aria-label="Exit figure history" data-button-label="Exit history">×</button>
+            <button id="star-selected" disabled title="Star figure" aria-label="Star figure" data-button-label="Star">☆</button>
+            <button id="compare" disabled title="Compare selected figures" aria-label="Compare selected figures" data-button-label="Compare">⇄</button>
+            <button id="download-selected" disabled title="Download selected figure" aria-label="Download selected figure" data-button-label="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg></button>
+            <button id="reveal" disabled title="Reveal cell" aria-label="Reveal cell" data-button-label="Reveal cell"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 12h8M12 8v8"/></svg></button>
         </div>
     </div>
 </header>
