@@ -2,6 +2,44 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.22] - 2026-09-30
+
+### Added
+
+- Scan individual PNG, JPEG, WebP, and SVG files or entire folders recursively, with confirmation before loading folders containing more than 200 images.
+- Browse saved-image folders and individual files in the Clio explorer and Gallery source picker; open the original image in an editor tab from the reveal action.
+- Keep manually added image sources for the current VS Code session and allow removing or rescanning them from the explorer.
+- Choose multiple scanned notebooks and image folders in the Gallery source dropdown, including quick All sources and None actions.
+- Add a Gallery Scan dropdown for notebooks, individual images, and folders, without using the Command Palette.
+
+### Fixed
+
+- Remove multi-image clipboard copying because paste targets handled it inconsistently and large selections could pause the gallery; single-image copy and batch save/export remain available.
+- Let the editor Gallery search field shrink to keep it alongside the source and action controls at medium tab widths; retain stacked rows only in narrow tabs.
+- Keep notebook image data while its tab is still open in another window, and revalidate/retry a missing editor-window preview when the webview becomes active.
+
+
+## [0.1.21] - 2026-09-23
+
+- Redesigned the editor-tab Gallery with a compact toolbar and separate, evenly padded toolbar, preview, and thumbnail cards.
+- Added a draggable, keyboard-accessible divider between the editor Gallery preview and thumbnails; its position is remembered for that Gallery.
+- Restored sidebar-sized editor thumbnails, moved the Figures heading out of the thumbnail grid overlay, and made selected cards visually distinct.
+- Added a star/unstar control to each Gallery thumbnail in the sidebar and editor tab; toolbar and thumbnail stars now use the same icon as the Starred scope.
+- Added a transparent or white preview-background setting for plots with transparent pixels.
+- Restored row-aware Up/Down thumbnail navigation and made Escape return from a focused comparison figure to comparison mode.
+- Changed the notebook picker reset entry to All notebooks once a notebook is selected.
+- Unified gallery button heights and corner radii, removed gaps in the scope selector, and stabilized toolbar wrapping in narrow panels.
+- Aligned the editor gallery search field with the toolbar when the header wraps at narrower widths, including the toolbar's changing width during resize.
+- Gave the Filters dropdown a matching chevron and a compact filter icon in icon-button mode.
+- Made the sidebar gallery action buttons equal-sized, including the Reveal Cell control, while keeping Exit History hidden outside history mode.
+- Added breathing room between editor-gallery thumbnail images and their star controls.
+
+- Keep notebooks scanned through the command palette in the gallery when switching or closing notebook tabs.
+- Allow selecting multiple notebooks in the Scan Notebook dialog.
+- Add an inline remove action to notebook rows in the Clio explorer.
+- Add a gallery picker for viewing a particular scanned notebook.
+- Rescan a notebook normally when it is opened in the editor after being removed from the Clio explorer.
+
 ## [0.1.20] - 2026-08-26
 
 ### Added

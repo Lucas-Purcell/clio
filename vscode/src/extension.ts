@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { scanNotebookCommand } from "./commands/scanNotebook";
+import { chooseImageFiles, chooseImageFolders, collectImagesRecursively, individualImagesSourceUri, scanImageSource } from "./commands/scanImages";
 import {
     FigureRecord,
     NotebookFigures,
@@ -17,6 +18,7 @@ import { FigureGalleryViewProvider } from "./gallery/figureGalleryView";
 import {
     FigureTreeItem,
     FigureTreeProvider,
+    NotebookTreeItem,
 } from "./views/figureTreeProvider";
 import {
     exportFigureAsPdf,
@@ -88,6 +90,43 @@ export function activate(context: vscode.ExtensionContext): void {
     const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
     const pendingMetadataRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
     const metadataSignatures = new Map<string, string>();
+    const manuallyScannedNotebooks = new Set<string>();
+    const excludedOpenNotebooks = new Set<string>();
+    const individualImages = new Map<string, vscode.Uri>();
+
+    const registerImageSource = async (source: NotebookFigures): Promise<void> => {
+        const previous = figureRegistry.getNotebook(source.uri);
+        const liveIds = new Set(source.figures.map((figure) => figure.id));
+        for (const figure of previous?.figures ?? []) {
+            if (!liveIds.has(figure.id)) imageStore.remove(figure.id);
+        }
+        figureRegistry.setNotebook(source.uri, source.name, source.figures, source.kind);
+        await refreshStarredSnapshots(source.figures);
+        provider.refresh();
+        gallery.refreshRegistry();
+        const registered = figureRegistry.getNotebook(source.uri);
+        if (registered) gallery.show(registered);
+    };
+
+    const scanFolder = async (folder: vscode.Uri): Promise<void> => {
+        const images = await collectImagesRecursively(folder);
+        if (!images) return;
+        const uri = folder.toString();
+        const source = await scanImageSource(uri, fileName(folder), "folder", images);
+        if (!source) return;
+        await registerImageSource(source);
+    };
+
+    const scanIndividualImages = async (images: readonly vscode.Uri[]): Promise<void> => {
+        for (const image of images) individualImages.set(image.toString(), image);
+        const source = await scanImageSource(
+            individualImagesSourceUri,
+            "Individual images",
+            "images",
+            [...individualImages.values()]
+        );
+        if (source) await registerImageSource(source);
+    };
 
     const isJupyterNotebook = (document: vscode.NotebookDocument): boolean =>
         document.uri.path.toLowerCase().endsWith(".ipynb");
@@ -112,6 +151,9 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const notebookUri = document.uri.toString();
+        if (excludedOpenNotebooks.has(notebookUri)) {
+            return;
+        }
         const notebookName = fileName(document.uri);
         const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
         const previousImages = new Map(
@@ -135,7 +177,7 @@ export function activate(context: vscode.ExtensionContext): void {
             (notebook) => notebook.uri.toString() === notebookUri
         );
 
-        if (!isStillOpen) {
+        if (!isStillOpen || excludedOpenNotebooks.has(notebookUri)) {
             return;
         }
 
@@ -162,6 +204,9 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const notebookUri = document.uri.toString();
+        if (excludedOpenNotebooks.has(notebookUri)) {
+            return;
+        }
         const existing = pendingRefreshes.get(notebookUri);
 
         if (existing) {
@@ -269,6 +314,9 @@ export function activate(context: vscode.ExtensionContext): void {
         lastNotebookEditorColumn = editor.viewColumn;
 
         const notebookUri = document.uri.toString();
+        if (excludedOpenNotebooks.has(notebookUri)) {
+            return;
+        }
         const registeredNotebook = figureRegistry.getNotebook(notebookUri);
 
         if (registeredNotebook) {
@@ -301,7 +349,49 @@ export function activate(context: vscode.ExtensionContext): void {
             gallery
         ),
         vscode.commands.registerCommand("figure-explorer.scanNotebook", () =>
-            scanNotebookCommand(provider, (notebook) => gallery.show(notebook))
+            scanNotebookCommand(provider, (notebook) => {
+                manuallyScannedNotebooks.add(notebook.uri);
+                excludedOpenNotebooks.delete(notebook.uri);
+                gallery.show(notebook);
+            })
+        ),
+        vscode.commands.registerCommand("figure-explorer.scanImages", async () => {
+            const images = await chooseImageFiles();
+            if (images?.length) await scanIndividualImages(images);
+        }),
+        vscode.commands.registerCommand("figure-explorer.scanFolder", async () => {
+            const folders = await chooseImageFolders();
+            for (const folder of folders ?? []) await scanFolder(folder);
+        }),
+        vscode.commands.registerCommand("figure-explorer.rescanSource", async (item: NotebookTreeItem) => {
+            const source = item?.notebook;
+            if (!source) return;
+            if (source.kind === "folder") {
+                await scanFolder(vscode.Uri.parse(source.uri));
+            } else if (source.kind === "images") {
+                await scanIndividualImages([...individualImages.values()]);
+            }
+        }),
+        vscode.commands.registerCommand(
+            "figure-explorer.unscanNotebook",
+            (item: NotebookTreeItem) => {
+                const uri = item?.notebook?.uri;
+                if (!uri) {
+                    return;
+                }
+                manuallyScannedNotebooks.delete(uri);
+                if (uri === individualImagesSourceUri) individualImages.clear();
+                if (item.notebook.kind === "notebook" && isNotebookTabOpen(uri)) {
+                    // Keep an already open editor removed until its tab closes.
+                    excludedOpenNotebooks.add(uri);
+                } else {
+                    excludedOpenNotebooks.delete(uri);
+                }
+                figureRegistry.removeNotebook(uri);
+                imageStore.clearNotebook(uri);
+                provider.refresh();
+                gallery.refreshRegistry();
+            }
         ),
         vscode.commands.registerCommand(
             "figure-explorer.revealFigureCell",
@@ -314,6 +404,12 @@ export function activate(context: vscode.ExtensionContext): void {
                 }
 
                 void revealNotebookCell(item.figure);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "figure-explorer.openSavedImage",
+            (item: FigureTreeItem) => {
+                if (item?.figure?.imageUri) void revealNotebookCell(item.figure);
             }
         ),
         vscode.commands.registerCommand(
@@ -376,6 +472,7 @@ export function activate(context: vscode.ExtensionContext): void {
             }
 
             const notebookUri = document.uri.toString();
+            excludedOpenNotebooks.delete(notebookUri);
             const pending = pendingRefreshes.get(notebookUri);
 
             if (pending) {
@@ -396,14 +493,43 @@ export function activate(context: vscode.ExtensionContext): void {
                 }
             }
 
-            figureRegistry.removeNotebook(notebookUri);
+            if (!manuallyScannedNotebooks.has(notebookUri) &&
+                !isNotebookTabOpen(notebookUri)) {
+                figureRegistry.removeNotebook(notebookUri);
+                imageStore.clearNotebook(notebookUri);
+            }
             provider.refresh();
             gallery.refreshRegistry();
         }),
-        vscode.window.tabGroups.onDidChangeTabs(() => {
+        vscode.window.tabGroups.onDidChangeTabs((event) => {
+            for (const uri of excludedOpenNotebooks) {
+                if (!isNotebookTabOpen(uri) || event.opened.some((tab) =>
+                    tab.input instanceof vscode.TabInputNotebook &&
+                    tab.input.uri.toString() === uri
+                )) {
+                    excludedOpenNotebooks.delete(uri);
+                }
+            }
+
+            for (const tab of event.opened) {
+                if (!(tab.input instanceof vscode.TabInputNotebook)) {
+                    continue;
+                }
+                const uri = tab.input.uri.toString();
+                const document = vscode.workspace.notebookDocuments.find(
+                    (notebook) => notebook.uri.toString() === uri
+                );
+                if (document && !figureRegistry.getNotebook(uri)) {
+                    void updateNotebook(document);
+                }
+            }
+
             for (const notebook of figureRegistry.getNotebooks()) {
-                if (!isNotebookTabOpen(notebook.uri)) {
+                if ((notebook.kind ?? "notebook") === "notebook" &&
+                    !manuallyScannedNotebooks.has(notebook.uri) &&
+                    !isNotebookTabOpen(notebook.uri)) {
                     figureRegistry.removeNotebook(notebook.uri);
+                    imageStore.clearNotebook(notebook.uri);
                 }
             }
 
@@ -422,6 +548,22 @@ export function activate(context: vscode.ExtensionContext): void {
 async function revealNotebookCell(
     figure: FigureRecord
 ): Promise<void> {
+    if (figure.imageUri) {
+        try {
+            const imageUri = vscode.Uri.parse(figure.imageUri);
+            const column = vscode.window.activeTextEditor?.viewColumn ??
+                lastNotebookEditorColumn ?? vscode.ViewColumn.One;
+            await vscode.commands.executeCommand("vscode.open", imageUri, {
+                viewColumn: column,
+                preserveFocus: false,
+            });
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            void vscode.window.showErrorMessage(`Could not open image: ${detail}`);
+        }
+        return;
+    }
+
     if (!figure.notebookUri) {
         void vscode.window.showWarningMessage(
             "The selected figure does not have a valid notebook reference."

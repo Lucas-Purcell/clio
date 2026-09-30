@@ -7,6 +7,8 @@ interface GalleryFigure {
     title?: string;
     tags: string[];
     cellIndex: number;
+    imageUri?: string;
+    sourceKind: "notebook" | "folder" | "images";
     mimeType: string;
     codeSnippet: string;
     cellSource: string;
@@ -23,8 +25,11 @@ interface GalleryCatalogMessage {
     type: "setCatalog";
     figures: GalleryFigure[];
     selectedKey?: string;
-    scope: "notebook" | "all" | "starred";
+    scope: "notebook" | "all" | "starred" | "selected";
     notebookName?: string;
+    notebooks?: Array<{ uri: string; name: string; kind: string }>;
+    selectedSourceUris?: string[];
+    activeSourceUri?: string;
     totalFigures: number;
     settings?: GallerySettings;
     historyMode?: boolean;
@@ -50,6 +55,7 @@ interface GallerySettings {
     buttonStyle: "icons" | "labels";
     thumbnailSize: "small" | "medium" | "large";
     compareLayout: "auto" | "grid" | "stack";
+    previewBackground: "transparent" | "white";
 }
 
 interface GallerySettingsMessage {
@@ -61,7 +67,8 @@ type GalleryWebviewMessage =
     | GalleryCatalogMessage
     | GalleryThumbnailMessage
     | GalleryPreviewMessage
-    | GallerySettingsMessage;
+    | GallerySettingsMessage
+    | { type: "revalidatePreview" };
 
 interface GalleryVsCodeMessage {
     type:
@@ -70,6 +77,8 @@ interface GalleryVsCodeMessage {
         | "requestPreview"
         | "selectFigure"
         | "setScope"
+        | "setSelectedSources"
+        | "scanSource"
         | "toggleStar"
         | "setStars"
         | "enterHistory"
@@ -89,7 +98,11 @@ interface GalleryVsCodeMessage {
 
     keys?: string[];
 
-    scope?: "notebook" | "all" | "starred";
+    scope?: "notebook" | "all" | "starred" | "selected";
+
+    uris?: string[];
+
+    kind?: "notebook" | "images" | "folder";
 
     pngData?: string;
 
@@ -100,6 +113,8 @@ interface GalleryVsCodeMessage {
 
 interface VsCodeApi {
     postMessage(message: GalleryVsCodeMessage): void;
+    getState(): { editorPaneRatio?: number } | undefined;
+    setState(state: { editorPaneRatio?: number }): void;
 }
 
 declare function acquireVsCodeApi(): VsCodeApi;
@@ -175,7 +190,14 @@ window.addEventListener("keydown", (event) => {
 
 let catalog: GalleryFigure[] = [];
 let selectedKey: string | undefined;
-let scope: "notebook" | "all" | "starred" = "notebook";
+let scope: "notebook" | "all" | "starred" | "selected" = "notebook";
+const sourcePicker = document.getElementById("notebook-picker") as HTMLElement;
+const sourcePickerButton = document.getElementById("source-picker-button") as HTMLButtonElement;
+const sourcePickerLabel = document.getElementById("source-picker-label") as HTMLElement;
+const sourcePickerPanel = document.getElementById("source-picker-panel") as HTMLElement;
+let sourceOptions: Array<{ uri: string; name: string; kind: string }> = [];
+let selectedSourceUris = new Set<string>();
+let activeSourceUri: string | undefined;
 let titleFilter: "all" | "titled" | "untitled" = "all";
 let activeTags: string[] = [];
 
@@ -187,6 +209,7 @@ let gallerySettings: GallerySettings = {
     buttonStyle: "icons",
     thumbnailSize: "medium",
     compareLayout: "auto",
+    previewBackground: "transparent",
 };
 
 const previewImages =
@@ -275,6 +298,9 @@ const count =
 const thumbnails =
     getElement<HTMLElement>("#thumbnails");
 
+const galleryDivider =
+    getElement<HTMLElement>("#gallery-divider");
+
 const preview =
     getElement<HTMLElement>("#preview");
 
@@ -293,6 +319,12 @@ const starSelected =
 const exitHistory =
     getElement<HTMLButtonElement>("#exit-history");
 
+const scanButton =
+    getElement<HTMLButtonElement>("#scan-button");
+
+const scanPanel =
+    getElement<HTMLElement>("#scan-panel");
+
 const filtersButton =
     getElement<HTMLButtonElement>("#filters-button");
 
@@ -310,6 +342,7 @@ const settingsPanel =
 
 if (
     !thumbnails ||
+    !galleryDivider ||
     !search ||
     !clearSearch ||
     !activeFilters ||
@@ -327,9 +360,123 @@ if (
     !settingsButton ||
     !settingsPanel ||
     !filtersButton ||
-    !filterPanel
+    !filterPanel ||
+    !scanButton ||
+    !scanPanel ||
+    !sourcePicker ||
+    !sourcePickerButton ||
+    !sourcePickerLabel ||
+    !sourcePickerPanel
 ) {
     throw new Error("Clio gallery DOM is incomplete.");
+}
+
+function setEditorPaneRatio(ratio: number, remember = false): void {
+    if (!document.body.classList.contains("editor-mode")) {
+        return;
+    }
+
+    const bodyWidth = document.body.clientWidth;
+    if (bodyWidth <= 0) {
+        return;
+    }
+    const availableWidth =
+        bodyWidth - galleryDivider.getBoundingClientRect().width;
+    const minimumPreview = Math.min(280, availableWidth * 0.4);
+    const minimumFigures = Math.min(220, availableWidth * 0.4);
+    const minimumRatio = minimumPreview / bodyWidth;
+    const maximumRatio =
+        (availableWidth - minimumFigures) / bodyWidth;
+    const nextRatio = Math.max(
+        minimumRatio,
+        Math.min(maximumRatio, ratio)
+    );
+
+    document.body.style.setProperty(
+        "--editor-preview-width",
+        `${(nextRatio * 100).toFixed(2)}%`
+    );
+    galleryDivider.setAttribute("aria-valuemin", String(Math.round(minimumRatio * 100)));
+    galleryDivider.setAttribute("aria-valuemax", String(Math.round(maximumRatio * 100)));
+    galleryDivider.setAttribute("aria-valuenow", String(Math.round(nextRatio * 100)));
+
+    if (remember) {
+        vscode.setState({
+            ...(vscode.getState() ?? {}),
+            editorPaneRatio: nextRatio,
+        });
+    }
+}
+
+if (document.body.classList.contains("editor-mode")) {
+    const rememberedRatio = vscode.getState()?.editorPaneRatio;
+    setEditorPaneRatio(
+        typeof rememberedRatio === "number" && Number.isFinite(rememberedRatio)
+            ? rememberedRatio
+            : 0.65
+    );
+
+    galleryDivider.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || document.body.classList.contains("comparison-mode")) {
+            return;
+        }
+
+        event.preventDefault();
+        galleryDivider.setPointerCapture(event.pointerId);
+        galleryDivider.classList.add("resizing");
+        document.body.classList.add("resizing-gallery-panes");
+    });
+
+    galleryDivider.addEventListener("pointermove", (event) => {
+        if (!galleryDivider.hasPointerCapture(event.pointerId)) {
+            return;
+        }
+
+        const left = document.body.getBoundingClientRect().left;
+        setEditorPaneRatio(
+            (event.clientX - left) / document.body.clientWidth
+        );
+    });
+
+    const finishResize = (event: PointerEvent): void => {
+        if (!galleryDivider.hasPointerCapture(event.pointerId)) {
+            return;
+        }
+        galleryDivider.releasePointerCapture(event.pointerId);
+        galleryDivider.classList.remove("resizing");
+        document.body.classList.remove("resizing-gallery-panes");
+        const value = parseFloat(
+            document.body.style.getPropertyValue("--editor-preview-width")
+        );
+        setEditorPaneRatio(value / 100, true);
+    };
+    galleryDivider.addEventListener("pointerup", finishResize);
+    galleryDivider.addEventListener("pointercancel", finishResize);
+
+    galleryDivider.addEventListener("dblclick", () => {
+        setEditorPaneRatio(0.65, true);
+    });
+
+    galleryDivider.addEventListener("keydown", (event) => {
+        const current =
+            parseFloat(galleryDivider.getAttribute("aria-valuenow") ?? "65") / 100;
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            setEditorPaneRatio(
+                current + (event.key === "ArrowRight" ? 0.025 : -0.025),
+                true
+            );
+        } else if (event.key === "Home") {
+            event.preventDefault();
+            setEditorPaneRatio(0.65, true);
+        }
+    });
+
+    window.addEventListener("resize", () => {
+        const current =
+            parseFloat(galleryDivider.getAttribute("aria-valuenow") ?? "65") / 100;
+        setEditorPaneRatio(current);
+    });
 }
 
 setupGalleryDragSelection();
@@ -345,6 +492,7 @@ function applyGallerySettings(settings: GallerySettings): void {
             settings.compareLayout === "grid" || settings.compareLayout === "stack"
                 ? settings.compareLayout
                 : "auto",
+        previewBackground: settings.previewBackground === "white" ? "white" : "transparent",
     };
 
     document.body.classList.toggle(
@@ -352,6 +500,7 @@ function applyGallerySettings(settings: GallerySettings): void {
         gallerySettings.buttonStyle === "labels"
     );
     document.body.dataset.thumbnailSize = gallerySettings.thumbnailSize;
+    document.body.dataset.previewBackground = gallerySettings.previewBackground;
 
     settingsPanel.querySelectorAll<HTMLButtonElement>("[data-setting]")
         .forEach((button) => {
@@ -412,14 +561,23 @@ function positionOpenPopups(): void {
         positionPopup(filterPanel, filtersButton);
     }
 
+    if (scanPanel.classList.contains("open")) {
+        positionPopup(scanPanel, scanButton);
+    }
+
     if (!settingsPanel.hidden) {
         positionPopup(settingsPanel, settingsButton);
+    }
+
+    if (sourcePickerPanel.classList.contains("open")) {
+        positionPopup(sourcePickerPanel, sourcePickerButton);
     }
 }
 
 settingsButton.setAttribute("aria-expanded", "false");
 settingsButton.addEventListener("click", () => {
     const opening = settingsPanel.hidden;
+    if (opening) closeScanMenu();
     settingsPanel.hidden = !opening;
     settingsButton.setAttribute("aria-expanded", String(opening));
 
@@ -500,6 +658,11 @@ window.addEventListener(
     "message",
     (event: MessageEvent<GalleryWebviewMessage>) => {
         const message = event.data;
+
+        if (message.type === "revalidatePreview") {
+            requestCurrentPreview();
+            return;
+        }
 
         if (message.type === "setSettings") {
             applyGallerySettings(message.settings);
@@ -615,7 +778,25 @@ window.addEventListener(
 
         catalog = message.figures;
         selectedKey = message.selectedKey;
+        const availableKeys = new Set(catalog.map((figure) => figure.key));
+        selectedKeys = selectedKeys.filter((key) => availableKeys.has(key));
+        if (selectionAnchorKey && !availableKeys.has(selectionAnchorKey)) {
+            selectionAnchorKey = selectedKey;
+        }
+        if (comparisonMode && selectedKeys.length < 2) {
+            exitComparisonMode();
+        }
         scope = message.scope;
+        sourceOptions = message.notebooks ?? [];
+        activeSourceUri = message.activeSourceUri;
+        selectedSourceUris = scope === "all"
+            ? new Set(sourceOptions.map((source) => source.uri))
+            : scope === "notebook" && activeSourceUri
+                ? new Set([activeSourceUri])
+                : scope === "selected"
+                    ? new Set(message.selectedSourceUris ?? [])
+                    : new Set();
+        renderSourcePicker();
         historyMode = Boolean(message.historyMode);
         document.body.classList.toggle("history-mode", historyMode);
         exitHistory.hidden = !historyMode;
@@ -624,7 +805,7 @@ window.addEventListener(
             historyMode
                 ? "Figure history"
                 : scope === "all"
-                    ? "All open notebooks"
+                    ? "All scanned sources"
                     : scope === "starred"
                         ? "Starred figures"
                         : message.notebookName || "Clio";
@@ -677,6 +858,160 @@ document
             });
         });
     });
+
+function closeSourcePicker(): void {
+    sourcePickerPanel.classList.remove("open");
+    sourcePickerButton.setAttribute("aria-expanded", "false");
+}
+
+function renderSourcePicker(): void {
+    sourcePickerButton.disabled = sourceOptions.length === 0;
+    if (sourcePickerButton.disabled) closeSourcePicker();
+
+    const selected = sourceOptions.filter((source) => selectedSourceUris.has(source.uri));
+    const label = scope === "starred"
+        ? "Choose sources…"
+        : scope === "all"
+            ? "All sources"
+            : selected.length === 0
+                ? "No sources"
+                : selected.length === 1
+                    ? selected[0].name
+                    : `${selected.length} sources`;
+    sourcePickerLabel.textContent = label;
+    sourcePickerButton.title = `Choose scanned sources: ${label}`;
+
+    const focusedUri = document.activeElement instanceof HTMLInputElement
+        ? document.activeElement.dataset.sourceUri : undefined;
+    const actions = document.createElement("div");
+    actions.className = "source-picker-actions";
+    const all = document.createElement("button");
+    all.type = "button";
+    all.textContent = "All sources";
+    all.addEventListener("click", () => {
+        vscode.postMessage({ type: "setScope", scope: "all" });
+    });
+    const none = document.createElement("button");
+    none.type = "button";
+    none.textContent = "None";
+    none.addEventListener("click", () => {
+        selectedSourceUris = new Set();
+        scope = "selected";
+        renderSourcePicker();
+        vscode.postMessage({ type: "setSelectedSources", uris: [] });
+    });
+    actions.append(all, none);
+    const rows = sourceOptions.map((source) => {
+        const row = document.createElement("label");
+        row.className = "source-picker-row";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.dataset.sourceUri = source.uri;
+        checkbox.checked = selectedSourceUris.has(source.uri);
+        checkbox.addEventListener("change", () => {
+            const next = new Set(selectedSourceUris);
+            if (checkbox.checked) next.add(source.uri);
+            else next.delete(source.uri);
+            selectedSourceUris = next;
+            scope = "selected";
+            renderSourcePicker();
+            vscode.postMessage({ type: "setSelectedSources", uris: [...next] });
+        });
+        const name = document.createElement("span");
+        name.textContent = source.name;
+        name.title = source.uri;
+        row.append(checkbox, name);
+        return row;
+    });
+    sourcePickerPanel.replaceChildren(actions, ...rows);
+    if (focusedUri && sourcePickerPanel.classList.contains("open")) {
+        const focused = [...sourcePickerPanel.querySelectorAll<HTMLInputElement>("input[data-source-uri]")]
+            .find((input) => input.dataset.sourceUri === focusedUri);
+        focused?.focus();
+    }
+}
+
+sourcePickerButton.addEventListener("click", () => {
+    const opening = !sourcePickerPanel.classList.contains("open");
+    if (opening) {
+        filterPanel.classList.remove("open");
+        tagPanel.classList.remove("open");
+        closeSettings();
+        closeScanMenu();
+    }
+    sourcePickerPanel.classList.toggle("open", opening);
+    sourcePickerButton.setAttribute("aria-expanded", String(opening));
+    if (opening) requestAnimationFrame(() => positionPopup(sourcePickerPanel, sourcePickerButton));
+});
+
+sourcePickerButton.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSourcePicker();
+});
+
+document.addEventListener("pointerdown", (event) => {
+    if (event.target instanceof Node && !sourcePicker.contains(event.target) &&
+        !sourcePickerPanel.contains(event.target)) {
+        closeSourcePicker();
+    }
+});
+sourcePickerPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        closeSourcePicker();
+        sourcePickerButton.focus();
+    }
+});
+
+/* ─────────────────────────────────────────────
+   Scan menu
+   ───────────────────────────────────────────── */
+
+function closeScanMenu(): void {
+    scanPanel.classList.remove("open");
+    scanButton.setAttribute("aria-expanded", "false");
+}
+
+scanButton.addEventListener("click", () => {
+    const opening = !scanPanel.classList.contains("open");
+    scanPanel.classList.toggle("open", opening);
+    scanButton.setAttribute("aria-expanded", String(opening));
+    if (opening) {
+        filterPanel.classList.remove("open");
+        tagPanel.classList.remove("open");
+        closeSourcePicker();
+        closeSettings();
+        requestAnimationFrame(() => positionPopup(scanPanel, scanButton));
+    }
+});
+
+scanPanel.querySelectorAll<HTMLButtonElement>("[data-scan-kind]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const kind = button.dataset.scanKind;
+        if (kind !== "notebook" && kind !== "images" && kind !== "folder") return;
+        closeScanMenu();
+        vscode.postMessage({ type: "scanSource", kind });
+    });
+});
+
+document.addEventListener("pointerdown", (event) => {
+    if (event.target instanceof Node &&
+        !scanPanel.contains(event.target) &&
+        !scanButton.contains(event.target)) {
+        closeScanMenu();
+    }
+});
+
+scanButton.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeScanMenu();
+});
+
+scanPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        closeScanMenu();
+        scanButton.focus();
+    }
+});
 
 /* ─────────────────────────────────────────────
    Filter menu
@@ -1189,7 +1524,7 @@ function updateSelectionUI(): void {
     downloadSelected.disabled = !selected.some((figure) => figure.available);
     starSelected.disabled = selected.length === 0 || historyMode;
     const shouldStar = selected.some((figure) => !figure.starred);
-    starSelected.textContent = shouldStar ? "☆" : "★";
+    starSelected.setAttribute("aria-pressed", String(selected.length > 0 && !shouldStar));
     const starLabel = `${shouldStar ? "Star" : "Unstar"} ${selected.length > 1 ? `${selected.length} figures` : "figure"}`;
     starSelected.title = starLabel;
     starSelected.setAttribute("aria-label", starLabel);
@@ -1230,6 +1565,8 @@ function renderThumbnailSelection(): void {
                 "comparison-selected",
                 isSelected
             );
+            button.parentElement?.classList.toggle("selected", isPrimary);
+            button.parentElement?.classList.toggle("comparison-selected", isSelected);
         });
 
     updateSelectionUI();
@@ -1241,7 +1578,7 @@ function updateComparisonUI(): void {
     downloadSelected.disabled = !selected.some((figure) => figure.available);
     starSelected.disabled = selected.length === 0 || historyMode;
     const shouldStar = selected.some((figure) => !figure.starred);
-    starSelected.textContent = shouldStar ? "☆" : "★";
+    starSelected.setAttribute("aria-pressed", String(selected.length > 0 && !shouldStar));
     const starLabel = `${shouldStar ? "Star" : "Unstar"} ${selected.length > 1 ? `${selected.length} figures` : "figure"}`;
     starSelected.title = starLabel;
     starSelected.setAttribute("aria-label", starLabel);
@@ -2020,19 +2357,11 @@ function selectAdjacentFigure(
         return;
     }
 
-    /*
-     * Determine the number of columns from the
-     * actual rendered thumbnail positions.
-     *
-     * Buttons in the same row have the same offsetTop.
-     */
-    const currentTop = currentButton.offsetTop;
-
-    const rowLength = thumbnailButtons.filter(
-        (button) =>
-            button.offsetTop === currentTop
-    ).length;
-
+    // The buttons sit inside cards, so measure card positions in the grid.
+    const currentCard = currentButton.closest<HTMLElement>(".thumbnail-card");
+    const currentTop = currentCard?.offsetTop ?? currentButton.offsetTop;
+    const currentCenter = (currentCard?.offsetLeft ?? currentButton.offsetLeft)
+        + (currentCard?.offsetWidth ?? currentButton.offsetWidth) / 2;
     let nextIndex: number;
 
     switch (direction) {
@@ -2045,12 +2374,32 @@ function selectAdjacentFigure(
             break;
 
         case "up":
-            nextIndex = currentIndex - rowLength;
+        case "down": {
+            const rows = new Map<number, HTMLButtonElement[]>();
+            for (const button of thumbnailButtons) {
+                const top = button.closest<HTMLElement>(".thumbnail-card")?.offsetTop
+                    ?? button.offsetTop;
+                rows.set(top, [...(rows.get(top) ?? []), button]);
+            }
+            const rowTops = [...rows.keys()].sort((left, right) => left - right);
+            const rowIndex = rowTops.indexOf(currentTop);
+            const nextTop = rowTops[rowIndex + (direction === "up" ? -1 : 1)];
+            if (nextTop === undefined) {
+                return;
+            }
+            const target = rows.get(nextTop)?.reduce((closest, button) => {
+                const card = button.closest<HTMLElement>(".thumbnail-card");
+                const center = (card?.offsetLeft ?? button.offsetLeft)
+                    + (card?.offsetWidth ?? button.offsetWidth) / 2;
+                const closestCard = closest.closest<HTMLElement>(".thumbnail-card");
+                const closestCenter = (closestCard?.offsetLeft ?? closest.offsetLeft)
+                    + (closestCard?.offsetWidth ?? closest.offsetWidth) / 2;
+                return Math.abs(center - currentCenter) < Math.abs(closestCenter - currentCenter)
+                    ? button : closest;
+            });
+            nextIndex = results.findIndex((figure) => figure.key === target?.dataset.key);
             break;
-
-        case "down":
-            nextIndex = currentIndex + rowLength;
-            break;
+        }
     }
 
     /*
@@ -2093,6 +2442,13 @@ function selectAdjacentFigure(
 
 document.addEventListener("keydown", (event) => {
     const target = event.target;
+
+    if (event.key === "Escape" && focusedFigure) {
+        event.preventDefault();
+        event.stopPropagation();
+        exitFigureFullscreen();
+        return;
+    }
 
     if (event.key === "Escape" && comparisonMode) {
         event.preventDefault();
@@ -2503,7 +2859,7 @@ function updatePreview(): void {
         preview.dataset.figureVersion = selected.version;
         preview.innerHTML =
             '<div class="preview-header"><h2>' + escapeHtml(figureTitle) + '</h2></div>' +
-            '<div class="preview-unavailable">Reopen or rescan this notebook to load the starred image.</div>';
+            '<div class="preview-unavailable">Reopen or rescan this source to load the starred image.</div>';
         source.innerHTML = "";
         reveal.disabled = false;
         return;
@@ -2555,6 +2911,10 @@ function updatePreview(): void {
     ) {
         updatePreviewMetadata(selected);
         reveal.disabled = false;
+        updateRevealAction(selected);
+        if (!existingImage.complete || existingImage.naturalWidth === 0) {
+            requestCurrentPreview();
+        }
         if (document.body.classList.contains("editor-mode")) {
             preview.querySelector(".preview-actions")?.append(reveal);
         }
@@ -2706,7 +3066,47 @@ function updatePreview(): void {
     updatePreviewMetadata(selected);
 
     reveal.disabled = false;
+    updateRevealAction(selected);
 }
+
+function updateRevealAction(figure: GalleryFigure): void {
+    const label = figure.imageUri ? "Open image" : "Reveal cell";
+    reveal.title = label;
+    reveal.setAttribute("aria-label", label);
+    reveal.dataset.buttonLabel = label;
+}
+
+function requestCurrentPreview(): void {
+    if (comparisonMode) {
+        for (const key of selectedKeys) {
+            if (catalog.find((figure) => figure.key === key)?.available) {
+                vscode.postMessage({ type: "requestPreview", key });
+            }
+        }
+        return;
+    }
+    if (!selectedKey) return;
+    const selected = catalog.find((figure) => figure.key === selectedKey);
+    if (!selected?.available) return;
+    vscode.postMessage({ type: "requestPreview", key: selectedKey });
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) requestCurrentPreview();
+});
+window.addEventListener("focus", requestCurrentPreview);
+
+// Only retry when the selected preview is actually missing; a healthy gallery
+// does not generate periodic image traffic.
+window.setInterval(() => {
+    if (document.hidden || comparisonMode || !selectedKey) return;
+    const selected = catalog.find((figure) => figure.key === selectedKey);
+    if (!selected?.available) return;
+    const image = preview.querySelector<HTMLImageElement>("#preview-image");
+    if (!image || !image.complete || image.naturalWidth === 0) {
+        requestCurrentPreview();
+    }
+}, 3000);
 
 async function copyFigureToClipboard(
     key: string
@@ -2840,9 +3240,7 @@ function showFigureContextMenu(
         : "";
 
     menu.innerHTML =
-        '<button type="button" data-action="copy-image">' +
-            "Copy Image" +
-        "</button>" +
+        (plural ? "" : '<button type="button" data-action="copy-image">Copy Image</button>') +
         '<button type="button" data-action="save-png">' +
             (plural ? "Save Selected Images" : "Save Image") +
         "</button>" +
@@ -3195,6 +3593,26 @@ function updateThumbnailElements(
             newButton.appendChild(img);
             newButton.appendChild(labelElement);
 
+            const card = document.createElement("div");
+            card.className = "thumbnail-card";
+            card.appendChild(newButton);
+
+            const starButton = document.createElement("button");
+            starButton.type = "button";
+            starButton.className = "thumbnail-star-button";
+            const starIcon = document.querySelector<SVGSVGElement>(".scope[data-scope='starred'] .star-icon");
+            if (starIcon) {
+                starButton.appendChild(starIcon.cloneNode(true));
+            }
+            starButton.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const key = newButton.dataset.key;
+                if (key) {
+                    vscode.postMessage({ type: "toggleStar", key });
+                }
+            });
+            card.appendChild(starButton);
+
             newButton.addEventListener("click", (event) => {
                 const key = newButton.dataset.key;
 
@@ -3270,11 +3688,21 @@ function updateThumbnailElements(
         }
 
         labelElement.textContent = label;
+        const card = button.parentElement;
+        const starButton = card?.querySelector<HTMLButtonElement>(
+            ".thumbnail-star-button"
+        );
+        if (starButton) {
+            starButton.title = figure.starred ? "Unstar figure" : "Star figure";
+            starButton.setAttribute("aria-label", starButton.title);
+            starButton.setAttribute("aria-pressed", String(figure.starred));
+            starButton.hidden = historyMode;
+        }
         button.classList.toggle("starred", figure.starred);
         button.classList.toggle("unavailable", !figure.available);
         button.title = figure.available
             ? figureTitle
-            : `${figureTitle} — reopen or rescan the notebook to load the image`;
+            : `${figureTitle} — reopen or rescan the source to load the image`;
         img.style.visibility = figure.available ? "" : "hidden";
 
         /*
@@ -3314,8 +3742,13 @@ function updateThumbnailElements(
             "comparison-selected",
             selectedKeys.includes(figure.key)
         );
+        card?.classList.toggle("selected", figure.key === selectedKey);
+        card?.classList.toggle(
+            "comparison-selected",
+            selectedKeys.includes(figure.key)
+        );
 
-        fragment.appendChild(button);
+        fragment.appendChild(card ?? button);
 
         existingButtons.delete(
             figure.key
@@ -3327,7 +3760,9 @@ function updateThumbnailElements(
      * exists in the catalog.
      */
     existingButtons.forEach((button) => {
-        button.remove();
+        (button.parentElement?.classList.contains("thumbnail-card")
+            ? button.parentElement
+            : button)?.remove();
     });
 
     thumbnails.appendChild(fragment);
@@ -3343,7 +3778,7 @@ function setupGalleryDragSelection(): void {
 
         const target = event.target as HTMLElement;
 
-        if (target.closest(".thumbnail")) {
+        if (target.closest(".thumbnail, .thumbnail-star-button")) {
             return;
         }
 
@@ -3738,7 +4173,7 @@ function filteredCatalog(): GalleryFigure[] {
             figure.searchText || "";
 
         const cell =
-            String(figure.cellIndex + 1);
+            figure.imageUri ? "" : String(figure.cellIndex + 1);
 
         const number =
             String(figure.number);

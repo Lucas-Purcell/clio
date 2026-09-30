@@ -3,10 +3,11 @@ import { FigureRecord, NotebookFigures } from "../notebook/types";
 export class FigureRegistry {
     private readonly notebooks = new Map<string, NotebookFigures>();
 
-    setNotebook(uri: string, name: string, figures: readonly FigureRecord[]): void {
+    setNotebook(uri: string, name: string, figures: readonly FigureRecord[], kind: NotebookFigures["kind"] = "notebook"): void {
         this.notebooks.set(uri, {
             uri,
             name,
+            kind,
             figures: figures.map((figure) => ({ ...figure, tags: [...figure.tags] })),
         });
     }

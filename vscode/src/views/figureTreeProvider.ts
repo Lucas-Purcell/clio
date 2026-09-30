@@ -48,12 +48,17 @@ export class NotebookTreeItem extends vscode.TreeItem {
                 : vscode.TreeItemCollapsibleState.None
         );
 
-        this.description = `${notebook.figures.length} figure${
+        const itemName = notebook.kind && notebook.kind !== "notebook" ? "image" : "figure";
+        this.description = `${notebook.figures.length} ${itemName}${
             notebook.figures.length === 1 ? "" : "s"
         }`;
 
         this.tooltip = notebookPathLabel(notebook.uri);
-        this.iconPath = new vscode.ThemeIcon("notebook");
+        this.contextValue = notebook.kind && notebook.kind !== "notebook"
+            ? "figureExplorer.imageSource" : "figureExplorer.notebook";
+        this.iconPath = new vscode.ThemeIcon(
+            notebook.kind === "folder" ? "folder" : notebook.kind === "images" ? "files" : "notebook"
+        );
 
         this.command = {
             command: "figure-explorer.openNotebookGallery",
@@ -72,15 +77,18 @@ export class FigureTreeItem extends vscode.TreeItem {
 
         const defaultTitle = `Figure ${number}`;
 
-        this.description = figure.title
-            ? `${defaultTitle} · Cell ${figure.cellIndex + 1}`
-            : `Cell ${figure.cellIndex + 1}`;
+        this.description = figure.imageUri
+            ? figure.notebookName
+            : figure.title
+                ? `${defaultTitle} · Cell ${figure.cellIndex + 1}`
+                : `Cell ${figure.cellIndex + 1}`;
 
-        this.tooltip =
-            `${figure.notebookName} — Cell ${figure.cellIndex + 1}\n` +
-            figure.codeSnippet;
+        this.tooltip = figure.imageUri
+            ? figure.codeSnippet
+            : `${figure.notebookName} — Cell ${figure.cellIndex + 1}\n` +
+                figure.codeSnippet;
 
-        this.iconPath = new vscode.ThemeIcon("graph-line");
+        this.iconPath = new vscode.ThemeIcon(figure.imageUri ? "file-media" : "graph-line");
 
         this.command = {
             command: "figure-explorer.openFigureGallery",
@@ -88,7 +96,7 @@ export class FigureTreeItem extends vscode.TreeItem {
             arguments: [figure],
         };
 
-        this.contextValue = "figureExplorer.figure";
+        this.contextValue = figure.imageUri ? "figureExplorer.image" : "figureExplorer.figure";
     }
 }
 

@@ -1,8 +1,8 @@
 {
   "name": "clio-figure-explorer",
-  "displayName": "Clio – Figure Explorer",
-  "description": "Clio: browse figures generated in Jupyter notebooks.",
-  "version": "0.1.20",
+  "displayName": "Clio \u2013 Figure Explorer",
+  "description": "Clio: browse figures from Jupyter notebooks and saved images.",
+  "version": "0.1.22",
   "publisher": "LPurcell",
   "license": "MIT",
   "repository": {
@@ -80,6 +80,19 @@
             "Stack compared figures vertically."
           ],
           "description": "Choose the default layout for Clio Gallery comparison mode."
+        },
+        "clio.gallery.previewBackground": {
+          "type": "string",
+          "enum": [
+            "transparent",
+            "white"
+          ],
+          "default": "transparent",
+          "enumDescriptions": [
+            "Show the editor or sidebar theme behind transparent plot pixels.",
+            "Show white behind transparent plot pixels for readable dark labels."
+          ],
+          "description": "Choose the background behind transparent figure previews."
         }
       }
     },
@@ -87,6 +100,28 @@
       {
         "command": "figure-explorer.scanNotebook",
         "title": "Clio: Scan Notebook"
+      },
+      {
+        "command": "figure-explorer.scanImages",
+        "title": "Clio: Scan Images"
+      },
+      {
+        "command": "figure-explorer.scanFolder",
+        "title": "Clio: Scan Folder"
+      },
+      {
+        "command": "figure-explorer.rescanSource",
+        "title": "Clio: Rescan Source",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "figure-explorer.openSavedImage",
+        "title": "Clio: Open Image"
+      },
+      {
+        "command": "figure-explorer.unscanNotebook",
+        "title": "Clio: Remove Scanned Source",
+        "icon": "$(close)"
       },
       {
         "command": "figure-explorer.openFigure",
@@ -117,6 +152,13 @@
         "title": "Clio: Open Gallery in Editor"
       }
     ],
+    "keybindings": [
+      {
+        "command": "figure-explorer.openGalleryInEditor",
+        "key": "alt+g",
+        "mac": "alt+g"
+      }
+    ],
     "menus": {
       "commandPalette": [
         {
@@ -142,9 +184,22 @@
         {
           "command": "figure-explorer.exportFigureAsPdf",
           "when": "false"
+        },
+        {
+          "command": "figure-explorer.rescanSource",
+          "when": "false"
+        },
+        {
+          "command": "figure-explorer.openSavedImage",
+          "when": "false"
         }
       ],
       "view/item/context": [
+        {
+          "command": "figure-explorer.unscanNotebook",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.notebook",
+          "group": "inline@1"
+        },
         {
           "command": "figure-explorer.revealFigureCell",
           "when": "view == figureExplorer.figures && viewItem == figureExplorer.figure",
@@ -158,6 +213,31 @@
         {
           "command": "figure-explorer.exportFigureAsPdf",
           "when": "view == figureExplorer.figures && viewItem == figureExplorer.figure",
+          "group": "navigation@3"
+        },
+        {
+          "command": "figure-explorer.unscanNotebook",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.imageSource",
+          "group": "inline@1"
+        },
+        {
+          "command": "figure-explorer.rescanSource",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.imageSource",
+          "group": "inline@2"
+        },
+        {
+          "command": "figure-explorer.openSavedImage",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.image",
+          "group": "navigation@1"
+        },
+        {
+          "command": "figure-explorer.saveFigureAsPng",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.image",
+          "group": "navigation@2"
+        },
+        {
+          "command": "figure-explorer.exportFigureAsPdf",
+          "when": "view == figureExplorer.figures && viewItem == figureExplorer.image",
           "group": "navigation@3"
         }
       ]

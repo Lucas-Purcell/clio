@@ -11,60 +11,64 @@ export async function scanNotebookCommand(
     onScanned?: (notebook: NotebookFigures) => void
 ): Promise<void> {
     const selected = await vscode.window.showOpenDialog({
-        canSelectMany: false,
+        canSelectMany: true,
         filters: { "Jupyter Notebook": ["ipynb"] },
         openLabel: "Scan Notebook",
     });
 
-    const uri = selected?.[0];
-
-    if (!uri) {
+    if (!selected?.length) {
         return;
     }
 
-    try {
-        const notebookUri = uri.toString();
-        const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
-        const previousImages = new Map(
-            previousFigures.flatMap((figure) => {
-                const bytes = imageStore.get(figure.id);
-                return bytes
-                    ? [[figure.id, Uint8Array.from(bytes)] as const]
-                    : [];
-            })
-        );
-        const figures = await scanNotebookFile(uri);
+    let totalFigures = 0;
+    let scannedCount = 0;
+    for (const uri of selected) {
+        try {
+            const notebookUri = uri.toString();
+            const previousFigures = figureRegistry.getNotebook(notebookUri)?.figures ?? [];
+            const previousImages = new Map(
+                previousFigures.flatMap((figure) => {
+                    const bytes = imageStore.get(figure.id);
+                    return bytes
+                        ? [[figure.id, Uint8Array.from(bytes)] as const]
+                        : [];
+                })
+            );
+            const figures = await scanNotebookFile(uri);
 
-        figureHistoryStore.captureChanges(
-            previousFigures,
-            figures,
-            previousImages
-        );
+            figureHistoryStore.captureChanges(
+                previousFigures,
+                figures,
+                previousImages
+            );
 
-        figureRegistry.setNotebook(
-            notebookUri,
-            fileName(uri),
-            figures
-        );
+            figureRegistry.setNotebook(
+                notebookUri,
+                fileName(uri),
+                figures
+            );
 
-        provider.refresh();
+            provider.refresh();
+            totalFigures += figures.length;
+            scannedCount += 1;
 
-        const notebook = figureRegistry.getNotebook(uri.toString());
+            const notebook = figureRegistry.getNotebook(uri.toString());
 
-        if (notebook) {
-            onScanned?.(notebook);
+            if (notebook) {
+                onScanned?.(notebook);
+            }
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+
+            void vscode.window.showErrorMessage(
+                `Could not scan ${fileName(uri)}: ${message}`
+            );
         }
-
+    }
+    if (scannedCount) {
         void vscode.window.showInformationMessage(
-            `Clio found ${figures.length} figure${
-                figures.length === 1 ? "" : "s"
-            }.`
-        );
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
-        void vscode.window.showErrorMessage(
-            `Could not scan notebook: ${message}`
+            `Clio scanned ${scannedCount} notebook${scannedCount === 1 ? "" : "s"} and found ${totalFigures} figure${totalFigures === 1 ? "" : "s"}.`
         );
     }
 }

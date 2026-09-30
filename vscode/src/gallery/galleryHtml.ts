@@ -16,6 +16,8 @@ const tagIcon = fs.readFileSync(
     "utf8"
 ).replaceAll("black", "currentColor");
 
+const starIcon = '<svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>';
+
 function createNonce(): string {
     const alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -115,15 +117,43 @@ ${css}
                 <span class="scope-label">This notebook</span>
             </button>
 
-            <button class="control scope" data-scope="all" title="All open notebooks" aria-label="All open notebooks">
+            <button class="control scope" data-scope="all" title="All scanned sources" aria-label="All scanned sources">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h11a2 2 0 0 1 2 2v13H7a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2Z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M5 7H3v13a2 2 0 0 0 2 2h11"/></svg>
-                <span class="scope-label">All open</span>
+                <span class="scope-label">All scanned</span>
             </button>
 
             <button class="control scope" data-scope="starred" title="Starred figures" aria-label="Starred figures">
-                <svg class="star-scope-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>
+                ${starIcon}
                 <span class="scope-label">Starred</span>
             </button>
+        </div>
+
+        <div id="notebook-picker" class="notebook-picker">
+            <button id="source-picker-button" class="control source-picker-button" type="button"
+                title="Choose scanned sources" aria-label="Choose scanned sources" aria-haspopup="dialog"
+                aria-expanded="false" aria-controls="source-picker-panel">
+                <span id="source-picker-label">Choose sources…</span>
+                <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m2.5 5.5 5.5 5 5.5-5"/></svg>
+            </button>
+            <div id="source-picker-panel" class="source-picker-panel" role="dialog" aria-label="Scanned sources"></div>
+        </div>
+
+        <div class="scan-menu">
+            <button id="scan-button" class="control scan-button" type="button"
+                title="Scan notebooks or images" aria-label="Scan notebooks or images"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="scan-panel">
+                <svg class="scan-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v3M3 7h18M3 7v12a2 2 0 0 0 2 2h6"/>
+                    <path d="M17 13v8M13 17h8"/>
+                </svg>
+                <span class="scan-label">Scan</span>
+                <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m2.5 5.5 5.5 5 5.5-5"/></svg>
+            </button>
+            <div id="scan-panel" class="scan-panel" role="menu" aria-label="Scan source">
+                <button type="button" role="menuitem" data-scan-kind="notebook">Notebook…</button>
+                <button type="button" role="menuitem" data-scan-kind="images">Images…</button>
+                <button type="button" role="menuitem" data-scan-kind="folder">Folder…</button>
+            </div>
         </div>
 
         <div class="filter-menu">
@@ -131,9 +161,12 @@ ${css}
                 id="filters-button"
                 class="control filters-button"
                 type="button"
+                title="Filter figures"
+                aria-label="Filter figures"
             >
-                Filters
-                <span class="chevron">▼</span>
+                <svg class="filters-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5v5.5l-3 1.5v-7Z"/></svg>
+                <span class="filters-label">Filters</span>
+                <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m2.5 5.5 5.5 5 5.5-5"/></svg>
             </button>
 
             <div id="filter-panel" class="filter-panel">
@@ -185,6 +218,13 @@ ${css}
                         <button type="button" data-setting="compareLayout" data-value="stack">Stack</button>
                     </div>
                 </div>
+                <div class="settings-group">
+                    <span class="settings-label">Preview background</span>
+                    <div class="settings-options">
+                        <button type="button" data-setting="previewBackground" data-value="transparent">Transparent</button>
+                        <button type="button" data-setting="previewBackground" data-value="white">White</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -194,7 +234,7 @@ ${css}
 
         <div class="result-actions">
             <button id="exit-history" hidden title="Exit figure history" aria-label="Exit figure history" data-button-label="Exit history">×</button>
-            <button id="star-selected" disabled title="Star figure" aria-label="Star figure" data-button-label="Star">☆</button>
+            <button id="star-selected" disabled title="Star figure" aria-label="Star figure" aria-pressed="false" data-button-label="Star">${starIcon}</button>
             <button id="compare" disabled title="Compare selected figures" aria-label="Compare selected figures" data-button-label="Compare">⇄</button>
             <button id="download-selected" disabled title="Download selected figure" aria-label="Download selected figure" data-button-label="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg></button>
             <button id="reveal" disabled title="Reveal cell" aria-label="Reveal cell" data-button-label="Reveal cell"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 12h8M12 8v8"/></svg></button>
@@ -202,8 +242,9 @@ ${css}
     </div>
 </header>
 
-<section id="thumbnails" class="thumbnails"></section>
-<section id="preview" class="preview"></section>
+<section id="thumbnails" class="thumbnails" aria-label="Figures"><h2 class="thumbnail-pane-title">Figures</h2></section>
+<div id="gallery-divider" class="gallery-divider" role="separator" aria-label="Resize preview and figures" aria-orientation="vertical" aria-valuemin="20" aria-valuemax="80" aria-valuenow="65" tabindex="0"><span class="gallery-divider-grip" aria-hidden="true"></span></div>
+<section id="preview" class="preview" aria-label="Preview"></section>
 <section id="source" class="source"></section>
 
 <script nonce="${nonce}">

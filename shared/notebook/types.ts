@@ -1,5 +1,7 @@
 export interface FigureRecord {
     id: string;
+    /** Set for a saved image rather than a notebook output. */
+    imageUri?: string;
     notebookUri: string;
     notebookName: string;
     /** Stable host cell identity used for session history and safe restoration. */
@@ -21,6 +23,7 @@ export interface FigureRecord {
 export interface NotebookFigures {
     uri: string;
     name: string;
+    kind?: "notebook" | "folder" | "images";
     figures: readonly FigureRecord[];
 }
 

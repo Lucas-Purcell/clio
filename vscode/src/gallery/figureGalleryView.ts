@@ -19,21 +19,25 @@ import {
     exportFiguresAsPdf,
 } from "../commands/figureActions";
 
-type SearchScope = "notebook" | "all" | "starred";
+type SearchScope = "notebook" | "all" | "starred" | "selected";
 type ButtonStyle = "icons" | "labels";
 type ThumbnailSize = "small" | "medium" | "large";
 type CompareLayout = "auto" | "grid" | "stack";
+type PreviewBackground = "transparent" | "white";
 
 interface GallerySettings {
     buttonStyle: ButtonStyle;
     thumbnailSize: ThumbnailSize;
     compareLayout: CompareLayout;
+    previewBackground: PreviewBackground;
 }
 
 type GalleryMessage =
     | { type: "webviewReady" }
     | { type: "selectFigure"; key: string }
     | { type: "setScope"; scope: SearchScope }
+    | { type: "setSelectedSources"; uris: string[] }
+    | { type: "scanSource"; kind: "notebook" | "images" | "folder" }
     | { type: "toggleStar"; key: string }
     | { type: "setStars"; keys: string[]; starred: boolean }
     | { type: "enterHistory"; key: string }
@@ -58,6 +62,8 @@ interface FigurePayload {
     title?: string;
     tags: string[];
     cellIndex: number;
+    imageUri?: string;
+    sourceKind: "notebook" | "folder" | "images";
     mimeType: string;
     codeSnippet: string;
     cellSource: string;
@@ -77,6 +83,7 @@ export class FigureGalleryViewProvider
     private notebook: NotebookFigures | undefined;
     private selectedKey: string | undefined;
     private scope: SearchScope = "notebook";
+    private selectedSourceUris = new Set<string>();
     private historySourceKey: string | undefined;
     private historySourceFallback: FigureRecord | undefined;
     private readonly disposables: vscode.Disposable[] = [];
@@ -144,6 +151,7 @@ export class FigureGalleryViewProvider
         if (this.panel) {
             this.panel.reveal();
             this.sendCatalog();
+            void this.panel.webview.postMessage({ type: "revalidatePreview" });
             return;
         }
 
@@ -170,6 +178,13 @@ export class FigureGalleryViewProvider
 
         this.panel.webview.html = galleryShellHtml(true);
 
+        this.panel.onDidChangeViewState((event) => {
+            if (event.webviewPanel.visible) {
+                this.sendCatalog(event.webviewPanel.webview, true);
+                void event.webviewPanel.webview.postMessage({ type: "revalidatePreview" });
+            }
+        }, undefined, this.disposables);
+
         this.panel.onDidDispose(
             () => {
                 this.panel = undefined;
@@ -185,6 +200,8 @@ export class FigureGalleryViewProvider
 
     show(notebook: NotebookFigures, selectedFigureId?: string): void {
         this.notebook = notebook;
+        this.selectedSourceUris = new Set([notebook.uri]);
+        this.scope = "selected";
         this.rebuildFigureList();
 
         if (selectedFigureId) {
@@ -235,7 +252,8 @@ export class FigureGalleryViewProvider
             this.notebook = notebook;
         }
 
-        if (this.scope === "all" || this.scope === "starred" || isCurrentNotebook) {
+        if (this.scope === "all" || this.scope === "starred" ||
+            this.scope === "selected" || isCurrentNotebook) {
             this.rebuildFigureList();
             this.ensureSelection();
             this.sendCatalog();
@@ -261,6 +279,9 @@ export class FigureGalleryViewProvider
     }
 
     refreshRegistry(): void {
+        this.selectedSourceUris = new Set(
+            [...this.selectedSourceUris].filter((uri) => figureRegistry.getNotebook(uri))
+        );
         if (this.notebook) {
             const updated = figureRegistry.getNotebook(this.notebook.uri);
 
@@ -340,6 +361,32 @@ export class FigureGalleryViewProvider
                 this.ensureSelection();
                 this.sendCatalog();
                 break;
+
+            case "scanSource": {
+                const command = message.kind === "notebook"
+                    ? "figure-explorer.scanNotebook"
+                    : message.kind === "images"
+                        ? "figure-explorer.scanImages"
+                        : "figure-explorer.scanFolder";
+                await vscode.commands.executeCommand(command);
+                break;
+            }
+
+            case "setSelectedSources": {
+                this.historySourceKey = undefined;
+                this.historySourceFallback = undefined;
+                const available = new Set(
+                    figureRegistry.getNotebooks().map((notebook) => notebook.uri)
+                );
+                this.selectedSourceUris = new Set(
+                    message.uris.filter((uri) => available.has(uri))
+                );
+                this.scope = "selected";
+                this.rebuildFigureList();
+                this.ensureSelection();
+                this.sendCatalog();
+                break;
+            }
 
             case "enterHistory": {
                 const match = this.findFigureByKey(message.key);
@@ -534,6 +581,7 @@ export class FigureGalleryViewProvider
                     configuration.update("buttonStyle", settings.buttonStyle, vscode.ConfigurationTarget.Global),
                     configuration.update("thumbnailSize", settings.thumbnailSize, vscode.ConfigurationTarget.Global),
                     configuration.update("compareLayout", settings.compareLayout, vscode.ConfigurationTarget.Global),
+                    configuration.update("previewBackground", settings.previewBackground, vscode.ConfigurationTarget.Global),
                 ]);
                 break;
             }
@@ -547,6 +595,7 @@ export class FigureGalleryViewProvider
             buttonStyle: configuration.get<ButtonStyle>("buttonStyle"),
             thumbnailSize: configuration.get<ThumbnailSize>("thumbnailSize"),
             compareLayout: configuration.get<CompareLayout>("compareLayout"),
+            previewBackground: configuration.get<PreviewBackground>("previewBackground"),
         });
     }
 
@@ -610,6 +659,7 @@ export class FigureGalleryViewProvider
                     const notebook: NotebookFigures = {
                         uri: figure.notebookUri,
                         name: figure.notebookName,
+                        kind: figure.imageUri ? "images" : "notebook",
                         figures: [figure],
                     };
 
@@ -621,9 +671,13 @@ export class FigureGalleryViewProvider
         const notebooks =
             this.scope === "all"
                 ? figureRegistry.getNotebooks()
-                : this.notebook
-                    ? [this.notebook]
-                    : [];
+                : this.scope === "selected"
+                    ? figureRegistry.getNotebooks().filter(
+                        (notebook) => this.selectedSourceUris.has(notebook.uri)
+                    )
+                    : this.notebook
+                        ? [this.notebook]
+                        : [];
 
         this.currentFigures = notebooks.flatMap((notebook) =>
             notebook.figures.map((figure, index) => ({
@@ -668,6 +722,8 @@ export class FigureGalleryViewProvider
                 title: figure.title,
                 tags: figure.tags,
                 cellIndex: figure.cellIndex,
+                imageUri: figure.imageUri,
+                sourceKind: notebook.kind ?? "notebook",
                 mimeType: figure.mimeType,
                 codeSnippet: figure.codeSnippet,
                 cellSource: figure.sourceSnapshot ?? figure.cellSource,
@@ -677,7 +733,7 @@ export class FigureGalleryViewProvider
                     (entry) => entry.figure.id === figure.id
                 ),
                 available: imageStore.get(figure.id) !== undefined,
-                hasHistory: figureHistoryStore.hasHistory(figure),
+                hasHistory: !figure.imageUri && figureHistoryStore.hasHistory(figure),
                 ...(historyPosition
                     ? { historyPosition, historyTotal }
                     : {}),
@@ -688,7 +744,16 @@ export class FigureGalleryViewProvider
             type: "setCatalog",
             scope: this.scope,
             selectedKey: this.selectedKey,
-            notebookName: this.notebook?.name ?? "",
+            notebookName: this.scope === "selected"
+                ? this.selectedSourceUris.size === 1
+                    ? figureRegistry.getNotebook([...this.selectedSourceUris][0])?.name ?? ""
+                    : this.selectedSourceUris.size === 0
+                        ? "No sources selected"
+                        : `${this.selectedSourceUris.size} selected sources`
+                : this.notebook?.name ?? "",
+            notebooks: figureRegistry.getNotebooks().map(({ uri, name, kind }) => ({ uri, name, kind: kind ?? "notebook" })),
+            selectedSourceUris: [...this.selectedSourceUris],
+            activeSourceUri: this.notebook?.uri,
             totalFigures: figures.length,
             figures,
             settings: this.gallerySettings(),
@@ -700,10 +765,15 @@ export class FigureGalleryViewProvider
             historyMode: message.historyMode,
             selectedKey: message.selectedKey,
             notebookName: message.notebookName,
+            notebooks: message.notebooks,
+            selectedSourceUris: message.selectedSourceUris,
+            activeSourceUri: message.activeSourceUri,
             settings: message.settings,
             figures: figures.map((figure) => [
                 figure.key,
                 figure.version,
+                figure.sourceKind,
+                figure.imageUri,
                 figure.title,
                 figure.tags,
                 figure.codeSnippet,
@@ -721,8 +791,9 @@ export class FigureGalleryViewProvider
             (!target || target === this.view.webview) &&
             (force || this.viewCatalogSignature !== signature)
         ) {
-            void this.view.webview.postMessage(message);
-            this.viewCatalogSignature = signature;
+            void this.view.webview.postMessage(message).then((posted) => {
+                if (posted) this.viewCatalogSignature = signature;
+            });
         }
 
         if (
@@ -730,8 +801,9 @@ export class FigureGalleryViewProvider
             (!target || target === this.panel.webview) &&
             (force || this.panelCatalogSignature !== signature)
         ) {
-            void this.panel.webview.postMessage(message);
-            this.panelCatalogSignature = signature;
+            void this.panel.webview.postMessage(message).then((posted) => {
+                if (posted) this.panelCatalogSignature = signature;
+            });
         }
     }
 }
@@ -751,5 +823,6 @@ function normalizeGallerySettings(settings: Partial<GallerySettings>): GallerySe
             settings.compareLayout === "grid" || settings.compareLayout === "stack"
                 ? settings.compareLayout
                 : "auto",
+        previewBackground: settings.previewBackground === "white" ? "white" : "transparent",
     };
 }
