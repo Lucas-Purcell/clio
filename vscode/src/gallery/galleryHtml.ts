@@ -33,7 +33,11 @@ function createNonce(): string {
     return value;
 }
 
-export function galleryShellHtml(editorMode = false): string {
+export function galleryShellHtml(
+    editorMode = false,
+    pdfWorkerSrc = "",
+    cspSource = ""
+): string {
     const nonce = createNonce();
 
     return `<!DOCTYPE html>
@@ -43,7 +47,7 @@ export function galleryShellHtml(editorMode = false): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; img-src data: blob:; connect-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"
+    content="default-src 'none'; img-src data: blob:; connect-src data: ${cspSource}; worker-src blob: ${cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}' blob: ${cspSource};"
 >
 <style nonce="${nonce}">
 ${css}
@@ -248,6 +252,7 @@ ${css}
 <section id="source" class="source"></section>
 
 <script nonce="${nonce}">
+window.__clioPdfWorkerSrc = ${JSON.stringify(pdfWorkerSrc)};
 ${script}
 </script>
 

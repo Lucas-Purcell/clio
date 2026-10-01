@@ -1,5 +1,15 @@
 /// <reference lib="dom" />
 
+import * as pdfjs from "pdfjs-dist";
+
+declare global {
+    interface Window {
+        __clioPdfWorkerSrc: string;
+    }
+}
+
+pdfjs.GlobalWorkerOptions.workerSrc = window.__clioPdfWorkerSrc;
+
 interface GalleryFigure {
     key: string;
     notebookName: string;
@@ -125,6 +135,19 @@ const imageIcon =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5.5 5.5"/></svg>';
 const pdfIcon =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6Z"/><path d="M14 2v5h5"/><text x="7" y="16" textLength="10" lengthAdjust="spacingAndGlyphs">PDF</text></svg>';
+const pdfPreviewUnavailable = "data:image/svg+xml," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">' +
+    '<rect width="640" height="480" fill="white"/>' +
+    '<text x="320" y="232" text-anchor="middle" fill="#444" font-size="28" font-family="sans-serif">PDF preview unavailable</text>' +
+    '<text x="320" y="276" text-anchor="middle" fill="#666" font-size="18" font-family="sans-serif">Open the original PDF to view it</text>' +
+    "</svg>"
+);
+const gifThumbnailUnavailable = "data:image/svg+xml," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">' +
+    '<rect width="320" height="240" fill="white"/>' +
+    '<text x="160" y="128" text-anchor="middle" fill="#555" font-size="30" font-family="sans-serif">GIF</text>' +
+    "</svg>"
+);
 const saveIcon =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 20v-6h8v6"/></svg>';
 const fullscreenIcon =
@@ -214,6 +237,30 @@ let gallerySettings: GallerySettings = {
 
 const previewImages =
     new Map<string, string>();
+
+async function pdfFirstPage(dataUrl: string, maxSide: number): Promise<string> {
+    const bytes = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
+    const loading = pdfjs.getDocument({ data: bytes });
+    const document = await loading.promise;
+    try {
+        const page = await document.getPage(1);
+        const original = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({
+            scale: Math.min(2, maxSide / Math.max(original.width, original.height)),
+        });
+        const canvas = window.document.createElement("canvas");
+        canvas.width = Math.max(1, Math.ceil(viewport.width));
+        canvas.height = Math.max(1, Math.ceil(viewport.height));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not render PDF page.");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: context, viewport }).promise;
+        return canvas.toDataURL("image/png");
+    } finally {
+        await document.destroy();
+    }
+}
 
 const MAX_CONCURRENT_THUMBNAIL_LOADS = 4;
 const MAX_THUMBNAIL_SIDE = 320;
@@ -654,6 +701,51 @@ const thumbnailObserver =
    Messages from extension
    ───────────────────────────────────────────── */
 
+async function displayPreviewMessage(message: GalleryPreviewMessage): Promise<void> {
+    const rawData = `data:${message.mimeType};base64,${message.data}`;
+    let imageData = rawData;
+
+    if (message.mimeType === "application/pdf") {
+        try {
+            imageData = previewImages.get(message.key) ?? await pdfFirstPage(rawData, 2200);
+        } catch {
+            imageData = pdfPreviewUnavailable;
+        }
+    }
+
+    if (catalog.find((figure) => figure.key === message.key)?.version !== message.version) {
+        return;
+    }
+    previewImages.set(message.key, imageData);
+
+    if (pendingCopyKey === message.key) {
+        pendingCopyKey = undefined;
+        if (imageData !== pdfPreviewUnavailable) {
+            void copyImageToClipboard(
+                imageData,
+                message.mimeType === "application/pdf" ? "image/png" : message.mimeType
+            );
+        }
+    }
+    if (pendingPdfKeys.delete(message.key)) void postPdfExport(message.key);
+    if (pendingDownloadKeys.delete(message.key)) void postDownload(message.key);
+
+    if (comparisonMode) {
+        renderComparison();
+        return;
+    }
+    if (message.key !== selectedKey) return;
+    const img = document.querySelector<HTMLImageElement>("#preview-image");
+    if (!img) return;
+    img.classList.remove("loaded");
+    img.onload = () => {
+        img.classList.add("loaded");
+        clampPreviewPan();
+        applyPreviewTransform();
+    };
+    img.src = imageData;
+}
+
 window.addEventListener(
     "message",
     (event: MessageEvent<GalleryWebviewMessage>) => {
@@ -692,63 +784,7 @@ window.addEventListener(
         }
 
         if (message.type === "preview") {
-            const imageData =
-                "data:" +
-                message.mimeType +
-                ";base64," +
-                message.data;
-
-            previewImages.set(
-                message.key,
-                imageData
-            );
-
-            if (pendingCopyKey === message.key) {
-                pendingCopyKey = undefined;
-
-                void copyImageToClipboard(
-                    imageData,
-                    message.mimeType
-                );
-            }
-
-            if (pendingPdfKeys.delete(message.key)) {
-                void postPdfExport(message.key);
-            }
-
-            if (pendingDownloadKeys.delete(message.key)) {
-                void postDownload(message.key);
-            }
-
-            if (comparisonMode) {
-                renderComparison();
-                return;
-            }
-
-            if (message.key !== selectedKey) {
-                return;
-            }
-
-            const img =
-                document.querySelector<HTMLImageElement>(
-                    "#preview-image"
-                );
-
-            if (!img) {
-                return;
-            }
-
-            img.classList.remove("loaded");
-
-            img.onload = () => {
-                img.classList.add("loaded");
-
-                clampPreviewPan();
-                applyPreviewTransform();
-            };
-
-            img.src = imageData;
-
+            void displayPreviewMessage(message);
             return;
         }
 
@@ -1258,6 +1294,15 @@ async function setThumbnailImage(
     const source = `data:${mimeType};base64,${data}`;
 
     try {
+        if (mimeType === "application/pdf") {
+            const still = await pdfFirstPage(source, MAX_THUMBNAIL_SIDE);
+            if (image.dataset.figureVersion === version) {
+                applyThumbnailSource(image, key, still);
+            } else {
+                finishThumbnailLoad(key);
+            }
+            return;
+        }
         const sourceBlob = await (await fetch(source)).blob();
         const bitmap = await createImageBitmap(sourceBlob);
         const scale = Math.min(1, MAX_THUMBNAIL_SIDE / Math.max(bitmap.width, bitmap.height));
@@ -1285,7 +1330,12 @@ async function setThumbnailImage(
         thumbnailUrls.set(key, { url, version });
         applyThumbnailSource(image, key, url);
     } catch {
-        applyThumbnailSource(image, key, source);
+        applyThumbnailSource(
+            image,
+            key,
+            mimeType === "application/pdf" ? pdfPreviewUnavailable
+                : mimeType === "image/gif" ? gifThumbnailUnavailable : source
+        );
     }
 }
 
@@ -3155,7 +3205,7 @@ async function postPdfExport(key: string): Promise<void> {
         return;
     }
 
-    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg") {
+    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg" || figure.mimeType === "application/pdf") {
         vscode.postMessage({ type: "exportPdf", key });
         return;
     }
@@ -3178,7 +3228,7 @@ async function postDownload(key: string): Promise<void> {
         return;
     }
 
-    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg") {
+    if (figure.mimeType === "image/png" || figure.mimeType === "image/jpeg" || figure.mimeType === "application/pdf") {
         vscode.postMessage({ type: "download", key });
         return;
     }

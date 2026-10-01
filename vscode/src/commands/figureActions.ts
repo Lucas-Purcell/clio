@@ -24,7 +24,7 @@ export async function saveFigureAsPng(
     const format = imageFormatLabel(figure.mimeType);
     const target = await vscode.window.showSaveDialog({
         defaultUri: defaultUri(figure, extension),
-        filters: { [`${format} image`]: [extension] },
+        filters: { [`${format} ${extension === "pdf" ? "document" : "image"}`]: [extension] },
         saveLabel: "Save Image",
     });
 
@@ -56,8 +56,8 @@ export async function downloadFigure(
     const target = await vscode.window.showSaveDialog({
         defaultUri: defaultUri(figure, extension),
         filters: {
-            [`${format} image`]: [extension],
-            "PDF document": ["pdf"],
+            [`${format} ${extension === "pdf" ? "document" : "image"}`]: [extension],
+            ...(extension === "pdf" ? {} : { "PDF document": ["pdf"] }),
         },
         saveLabel: "Download Figure",
     });
@@ -69,7 +69,9 @@ export async function downloadFigure(
     if (target.path.toLowerCase().endsWith(".pdf")) {
         await vscode.workspace.fs.writeFile(
             target,
-            await createFigurePdf(bytes, figure.mimeType, rasterizedPng)
+            figure.mimeType === "application/pdf"
+                ? bytes
+                : await createFigurePdf(bytes, figure.mimeType, rasterizedPng)
         );
         vscode.window.showInformationMessage("Figure exported as PDF.");
         return;
@@ -104,7 +106,9 @@ export async function exportFigureAsPdf(
     }
 
     const pdfBytes =
-        await createFigurePdf(bytes, figure.mimeType, rasterizedPng);
+        figure.mimeType === "application/pdf"
+            ? bytes
+            : await createFigurePdf(bytes, figure.mimeType, rasterizedPng);
 
     await vscode.workspace.fs.writeFile(
         target,
@@ -210,13 +214,14 @@ export async function exportFiguresAsPdf(
             continue;
         }
 
-        if (figure.mimeType !== "image/png" && figure.mimeType !== "image/jpeg") {
+        if (figure.mimeType !== "image/png" && figure.mimeType !== "image/jpeg" && figure.mimeType !== "application/pdf") {
             missing += 1;
             continue;
         }
 
-        const pdfBytes =
-            await createFigurePdf(bytes, figure.mimeType);
+        const pdfBytes = figure.mimeType === "application/pdf"
+            ? bytes
+            : await createFigurePdf(bytes, figure.mimeType);
 
         const target = vscode.Uri.joinPath(
             targetFolder,

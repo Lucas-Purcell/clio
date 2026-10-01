@@ -11,6 +11,8 @@ const imageExtensions = new Map([
     [".jpeg", "image/jpeg"],
     [".webp", "image/webp"],
     [".svg", "image/svg+xml"],
+    [".gif", "image/gif"],
+    [".pdf", "application/pdf"],
 ]);
 
 function basename(uri: vscode.Uri): string {
@@ -27,7 +29,7 @@ export async function chooseImageFiles(): Promise<readonly vscode.Uri[] | undefi
         canSelectMany: true,
         canSelectFiles: true,
         canSelectFolders: false,
-        filters: { Images: ["png", "jpg", "jpeg", "webp", "svg"] },
+        filters: { Images: ["png", "jpg", "jpeg", "webp", "svg", "gif", "pdf"] },
         openLabel: "Scan Images",
     });
 }

@@ -99,6 +99,7 @@ export class FigureGalleryViewProvider
     }> = [];
 
     constructor(
+        private readonly extensionUri: vscode.Uri,
         private readonly revealCell: (figure: FigureRecord) => void,
         private readonly getStarredFigures: () => readonly StarredFigureRecord[],
         private readonly toggleStarredFigure: (figure: FigureRecord) => Promise<void>,
@@ -111,6 +112,13 @@ export class FigureGalleryViewProvider
                 }
             })
         );
+    }
+
+    private galleryHtml(webview: vscode.Webview, editorMode = false): string {
+        const workerUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, "dist", "pdf.worker.min.mjs")
+        );
+        return galleryShellHtml(editorMode, workerUri.toString(), webview.cspSource);
     }
 
     getEditorViewColumn(): vscode.ViewColumn | undefined {
@@ -132,7 +140,7 @@ export class FigureGalleryViewProvider
             this.disposables
         );
 
-        webviewView.webview.html = galleryShellHtml();
+        webviewView.webview.html = this.galleryHtml(webviewView.webview);
 
         webviewView.onDidDispose(
             () => {
@@ -176,7 +184,7 @@ export class FigureGalleryViewProvider
             this.disposables
         );
 
-        this.panel.webview.html = galleryShellHtml(true);
+        this.panel.webview.html = this.galleryHtml(this.panel.webview, true);
 
         this.panel.onDidChangeViewState((event) => {
             if (event.webviewPanel.visible) {

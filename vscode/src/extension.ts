@@ -74,6 +74,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     };
     const gallery = new FigureGalleryViewProvider(
+        context.extensionUri,
         (figure: FigureRecord) => {
             void revealNotebookCell(figure);
         },

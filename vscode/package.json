@@ -1,8 +1,8 @@
 {
   "name": "clio-figure-explorer",
-  "displayName": "Clio \u2013 Figure Explorer",
+  "displayName": "Clio – Figure Explorer",
   "description": "Clio: browse figures from Jupyter notebooks and saved images.",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "publisher": "LPurcell",
   "license": "MIT",
   "repository": {
@@ -288,6 +288,7 @@
     "typescript-eslint": "^8.61.1"
   },
   "dependencies": {
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "4.8.69"
   }
 }

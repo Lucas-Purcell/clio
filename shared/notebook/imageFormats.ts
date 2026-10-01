@@ -37,7 +37,7 @@ export function notebookImageOutput(
     return undefined;
 }
 
-export function imageExtension(mimeType: string): "png" | "jpg" | "webp" | "svg" {
+export function imageExtension(mimeType: string): "png" | "jpg" | "webp" | "svg" | "gif" | "pdf" {
     switch (mimeType) {
         case "image/jpeg":
             return "jpg";
@@ -45,6 +45,10 @@ export function imageExtension(mimeType: string): "png" | "jpg" | "webp" | "svg"
             return "webp";
         case "image/svg+xml":
             return "svg";
+        case "image/gif":
+            return "gif";
+        case "application/pdf":
+            return "pdf";
         default:
             return "png";
     }
@@ -58,6 +62,10 @@ export function imageFormatLabel(mimeType: string): string {
             return "WebP";
         case "image/svg+xml":
             return "SVG";
+        case "image/gif":
+            return "GIF";
+        case "application/pdf":
+            return "PDF";
         default:
             return "PNG";
     }

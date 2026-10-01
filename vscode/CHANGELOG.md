@@ -2,6 +2,13 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.23] - 2026-10-01
+
+### Added
+
+- Scan GIF and PDF files individually or recursively in folders alongside the existing image formats.
+- Show still GIF thumbnails while keeping animated GIF previews; render the first page of PDFs for thumbnails and previews while retaining the original PDF for opening and saving.
+
 ## [0.1.22] - 2026-09-30
 
 ### Added

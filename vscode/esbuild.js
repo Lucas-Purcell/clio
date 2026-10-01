@@ -44,6 +44,14 @@ function copyGalleryAssets() {
 
     fs.mkdirSync(outputRoot, { recursive: true });
     fs.copyFileSync(source, destination);
+    fs.copyFileSync(
+        require.resolve("pdfjs-dist/build/pdf.worker.min.mjs"),
+        path.join(outputRoot, "pdf.worker.min.mjs")
+    );
+    fs.copyFileSync(
+        path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "LICENSE"),
+        path.join(outputRoot, "pdfjs-LICENSE.txt")
+    );
 }
 
 async function main() {

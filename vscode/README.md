@@ -2,7 +2,7 @@
 
 ## Figure Explorer for VS Code
 
-Clio gathers PNG, JPEG, WebP, and SVG figures from Jupyter notebooks and saved image files into a searchable gallery in VS Code. Browse the current notebook, scanned sources, or your starred collection; inspect a larger preview, compare plots, and return directly to a notebook cell or open a saved image.
+Clio gathers PNG, JPEG, WebP, and SVG figures from Jupyter notebooks, plus PNG, JPEG, WebP, SVG, GIF, and PDF files from scanned image sources, into a searchable gallery in VS Code. Browse the current notebook, scanned sources, or your starred collection; inspect a larger preview, compare plots, and return directly to a notebook cell or open a saved image.
 
 ## Install
 
@@ -11,14 +11,14 @@ Install **Clio – Figure Explorer** from the VS Code Marketplace, then open a J
 To install a downloaded release manually, run:
 
 ```bash
-code --install-extension clio-figure-explorer-0.1.22.vsix
+code --install-extension clio-figure-explorer-0.1.23.vsix
 ```
 
 ## Features
 
 - Browse figures from the active notebook, all scanned sources, or any chosen combination of notebooks and image folders. Use the Gallery source dropdown to check or uncheck sources without closing it, with All sources and None shortcuts.
 - Scan one or several notebook files from the command palette without opening tabs. Manually scanned notebooks remain in Clio for the current VS Code session until removed with the × action on their explorer row.
-- Run **Clio: Scan Folder** to recursively include PNG, JPEG, WebP, and SVG files in a folder and its subfolders. Clio asks before loading more than 200 images. Use **Clio: Scan Images** for individual files. These manually added sources last only for the current VS Code session; remove or rescan them from the Clio explorer.
+- Run **Clio: Scan Folder** to recursively include PNG, JPEG, WebP, SVG, GIF, and PDF files in a folder and its subfolders. Clio asks before loading more than 200 files. Use **Clio: Scan Images** for individual files. GIF thumbnails are still images; their previews remain animated. PDFs show their first page in Clio while the original PDF can be opened or saved. These manually added sources last only for the current VS Code session; remove or rescan them from the Clio explorer.
 - Use the **Scan** dropdown beside Filters in either Gallery view to add notebooks, individual images, or folders without opening the Command Palette.
 - Saved images appear under their folder or **Individual images** in the explorer and in the Gallery source picker. The reveal/open action opens the original image as an editor tab.
 - Star important figures from the toolbar or directly on Gallery thumbnails in the sidebar or editor tab, then return to them through the persistent Starred scope. Closed-notebook stars retain their metadata and become fully available when the notebook is reopened or rescanned.
@@ -36,7 +36,7 @@ code --install-extension clio-figure-explorer-0.1.22.vsix
 - Compare selected figures side by side.
 - Customize Gallery controls with icon-only or labeled buttons, small/medium/large fixed thumbnails, and automatic, grid, or stacked comparison layouts.
 - Keeps Gallery controls and their dropdown menus within narrow or resized panels.
-- Preview PNG, JPEG, WebP, and SVG images; save each in its original format, export PDF files, copy as PNG, and reveal its source cell or open its saved file.
+- Preview PNG, JPEG, WebP, SVG, and GIF images or the first page of a scanned PDF; save originals, export PDF files, copy a preview as PNG, and reveal a source cell or open a saved file.
 
 ## Figure titles and tags
 
