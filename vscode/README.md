@@ -11,7 +11,7 @@ Install **Clio – Figure Explorer** from the VS Code Marketplace, then open a J
 To install a downloaded release manually, run:
 
 ```bash
-code --install-extension clio-figure-explorer-0.1.23.vsix
+code --install-extension clio-figure-explorer-0.1.24.vsix
 ```
 
 ## Features
@@ -71,7 +71,7 @@ One title is applied to every figure from the cell. When there are fewer titles 
 - `Clio: Open Gallery in Editor`
 - `Clio: Reveal Cell`
 
-Use the Gallery ⚙ button to change the button style, thumbnail size, comparison layout, and preview background. Choose **White** for transparent plots whose dark labels are difficult to read against a dark theme. These preferences are also available in VS Code Settings under **Clio Gallery**.
+Use the Gallery ⚙ button to change the button style, thumbnail size, comparison layout, and preview background. Choose **White** for transparent plots whose dark labels are difficult to read against a dark theme; preview hover controls remain visible in a dark toolbar. These preferences are also available in VS Code Settings under **Clio Gallery**.
 
 ## License
 

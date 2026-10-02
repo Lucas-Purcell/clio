@@ -2,6 +2,12 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
+## [0.1.24] - Unreleased
+
+### Fixed
+
+- Give preview and comparison hover controls a high-contrast dark toolbar when the preview background is set to White.
+
 ## [0.1.23] - 2026-10-01
 
 ### Added
