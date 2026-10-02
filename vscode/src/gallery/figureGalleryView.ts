@@ -6,6 +6,7 @@ import {
 } from "../../../shared/notebook/types";
 import { figureRegistry } from "../../../shared/registry/figureRegistry";
 import { imageStore } from "../../../shared/registry/imageStore";
+import { loadScannedImage } from "../commands/scanImages";
 import {
     figureHistorySourceKey,
     figureHistoryStore,
@@ -316,15 +317,23 @@ export class FigureGalleryViewProvider
         );
     }
 
-    private sendImage(
+    private async sendImage(
         key: string,
         type: "thumbnail" | "preview",
         target: vscode.Webview
-    ): void {
+    ): Promise<void> {
         const match = this.findFigureByKey(key);
-        const bytes = match ? imageStore.get(match.figure.id) : undefined;
+        if (!match) return;
 
-        if (!match || !bytes) {
+        const bytes = await loadScannedImage(match.figure);
+        if (!bytes) {
+            // Keep the thumbnail queue moving even if a saved file was removed.
+            const placeholder = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="white"/><text x="160" y="125" text-anchor="middle" fill="#555" font-size="20">File unavailable</text></svg>';
+            void target.postMessage({
+                type, key, mimeType: "image/svg+xml",
+                data: Buffer.from(placeholder).toString("base64"),
+                version: match.figure.version,
+            });
             return;
         }
 
@@ -340,11 +349,11 @@ export class FigureGalleryViewProvider
     }
 
     private sendThumbnail(key: string, target: vscode.Webview): void {
-        this.sendImage(key, "thumbnail", target);
+        void this.sendImage(key, "thumbnail", target);
     }
 
     private sendPreview(key: string, target: vscode.Webview): void {
-        this.sendImage(key, "preview", target);
+        void this.sendImage(key, "preview", target);
     }
 
     private async handleMessage(
@@ -740,7 +749,7 @@ export class FigureGalleryViewProvider
                 starred: this.getStarredFigures().some(
                     (entry) => entry.figure.id === figure.id
                 ),
-                available: imageStore.get(figure.id) !== undefined,
+                available: figure.imageUri !== undefined || imageStore.get(figure.id) !== undefined,
                 hasHistory: !figure.imageUri && figureHistoryStore.hasHistory(figure),
                 ...(historyPosition
                     ? { historyPosition, historyTotal }

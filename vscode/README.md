@@ -11,14 +11,14 @@ Install **Clio – Figure Explorer** from the VS Code Marketplace, then open a J
 To install a downloaded release manually, run:
 
 ```bash
-code --install-extension clio-figure-explorer-0.1.24.vsix
+code --install-extension clio-figure-explorer-0.1.25.vsix
 ```
 
 ## Features
 
 - Browse figures from the active notebook, all scanned sources, or any chosen combination of notebooks and image folders. Use the Gallery source dropdown to check or uncheck sources without closing it, with All sources and None shortcuts.
 - Scan one or several notebook files from the command palette without opening tabs. Manually scanned notebooks remain in Clio for the current VS Code session until removed with the × action on their explorer row.
-- Run **Clio: Scan Folder** to recursively include PNG, JPEG, WebP, SVG, GIF, and PDF files in a folder and its subfolders. Clio asks before loading more than 200 files. Use **Clio: Scan Images** for individual files. GIF thumbnails are still images; their previews remain animated. PDFs show their first page in Clio while the original PDF can be opened or saved. These manually added sources last only for the current VS Code session; remove or rescan them from the Clio explorer.
+- Run **Clio: Scan Folder** to recursively include PNG, JPEG, WebP, SVG, GIF, and PDF files in a folder and its subfolders. Clio asks before loading more than 200 files. Use **Clio: Scan Images** for individual files. GIF thumbnails are still images; their previews remain animated. PDFs show their first page in Clio while the original PDF can be opened or saved. PDF files are indexed from metadata first, then read as their thumbnails or previews are needed. These manually added sources last only for the current VS Code session; remove or rescan them from the Clio explorer.
 - Use the **Scan** dropdown beside Filters in either Gallery view to add notebooks, individual images, or folders without opening the Command Palette.
 - Saved images appear under their folder or **Individual images** in the explorer and in the Gallery source picker. The reveal/open action opens the original image as an editor tab.
 - Star important figures from the toolbar or directly on Gallery thumbnails in the sidebar or editor tab, then return to them through the persistent Starred scope. Closed-notebook stars retain their metadata and become fully available when the notebook is reopened or rescanned.

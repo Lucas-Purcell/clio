@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { PDFDocument } from "pdf-lib";
 import { FigureRecord } from "../../../shared/notebook/types";
-import { imageStore } from "../../../shared/registry/imageStore";
+import { loadScannedImage } from "./scanImages";
 import {
     imageExtension,
     imageFormatLabel,
@@ -11,7 +11,7 @@ export async function saveFigureAsPng(
     figure: FigureRecord
 ): Promise<void> {
 
-    const bytes = imageStore.get(figure.id);
+    const bytes = await loadScannedImage(figure);
 
     if (!bytes) {
         vscode.window.showErrorMessage(
@@ -44,7 +44,7 @@ export async function downloadFigure(
     figure: FigureRecord,
     rasterizedPng?: Uint8Array
 ): Promise<void> {
-    const bytes = imageStore.get(figure.id);
+    const bytes = await loadScannedImage(figure);
 
     if (!bytes) {
         vscode.window.showErrorMessage("Image data is no longer available.");
@@ -86,7 +86,7 @@ export async function exportFigureAsPdf(
     rasterizedPng?: Uint8Array
 ): Promise<void> {
 
-    const bytes = imageStore.get(figure.id);
+    const bytes = await loadScannedImage(figure);
 
     if (!bytes) {
         vscode.window.showErrorMessage(
@@ -150,7 +150,7 @@ export async function saveFiguresAsPng(
     let missing = 0;
 
     for (const figure of figures) {
-        const bytes = imageStore.get(figure.id);
+        const bytes = await loadScannedImage(figure);
 
         if (!bytes) {
             missing += 1;
@@ -207,7 +207,7 @@ export async function exportFiguresAsPdf(
     let missing = 0;
 
     for (const figure of figures) {
-        const bytes = imageStore.get(figure.id);
+        const bytes = await loadScannedImage(figure);
 
         if (!bytes) {
             missing += 1;

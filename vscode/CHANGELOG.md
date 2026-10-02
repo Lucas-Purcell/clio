@@ -2,7 +2,14 @@
 
 All notable changes to Clio for VS Code are documented in this file.
 
-## [0.1.24] - Unreleased
+## [0.1.25] - 2026-10-02
+
+### Improved
+
+- Index scanned PDFs from file metadata and load their contents only when a thumbnail, preview, or export needs them, so PDF-heavy folders appear sooner and unnecessary reads are avoided.
+- Render smaller PDF thumbnails and share simultaneous reads of the same saved file.
+
+## [0.1.24] - 2026-10-02
 
 ### Fixed
 

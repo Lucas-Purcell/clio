@@ -1295,7 +1295,7 @@ async function setThumbnailImage(
 
     try {
         if (mimeType === "application/pdf") {
-            const still = await pdfFirstPage(source, MAX_THUMBNAIL_SIDE);
+            const still = await pdfFirstPage(source, 240);
             if (image.dataset.figureVersion === version) {
                 applyThumbnailSource(image, key, still);
             } else {

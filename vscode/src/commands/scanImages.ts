@@ -2,9 +2,11 @@ import * as vscode from "vscode";
 import { createHash } from "crypto";
 import { FigureRecord, NotebookFigures } from "../../../shared/notebook/types";
 import { imageStore } from "../../../shared/registry/imageStore";
+import { figureRegistry } from "../../../shared/registry/figureRegistry";
 
 export const individualImagesSourceUri = "clio:individual-images";
 const largeFolderThreshold = 200;
+const pendingImageReads = new Map<string, Promise<Readonly<Uint8Array> | undefined>>();
 const imageExtensions = new Map([
     [".png", "image/png"],
     [".jpg", "image/jpeg"],
@@ -22,6 +24,29 @@ function basename(uri: vscode.Uri): string {
 function imageMime(uri: vscode.Uri): string | undefined {
     const extension = /\.[^.]+$/.exec(uri.path.toLowerCase())?.[0];
     return extension ? imageExtensions.get(extension) : undefined;
+}
+
+/** Read a scanned file only when its image data is actually needed. */
+export async function loadScannedImage(figure: FigureRecord): Promise<Readonly<Uint8Array> | undefined> {
+    const cached = imageStore.get(figure.id);
+    if (cached || !figure.imageUri) return cached;
+
+    const requestKey = `${figure.id}@${figure.version}`;
+    let pending = pendingImageReads.get(requestKey);
+    if (!pending) {
+        pending = Promise.resolve(vscode.workspace.fs.readFile(vscode.Uri.parse(figure.imageUri)))
+            .then((bytes) => {
+                const current = figureRegistry.getNotebook(figure.notebookUri)?.figures
+                    .find((item) => item.id === figure.id);
+                if (current && current.version !== figure.version) return undefined;
+                imageStore.put(figure.id, bytes, figure.version);
+                return imageStore.get(figure.id)!;
+            })
+            .catch(() => undefined)
+            .finally(() => pendingImageReads.delete(requestKey));
+        pendingImageReads.set(requestKey, pending);
+    }
+    return pending;
 }
 
 export async function chooseImageFiles(): Promise<readonly vscode.Uri[] | undefined> {
@@ -113,11 +138,19 @@ export async function scanImageSource(
                 try {
                     const mimeType = imageMime(uri);
                     if (!mimeType) return undefined;
-                    const bytes = await vscode.workspace.fs.readFile(uri);
                     const imageUri = uri.toString();
                     const id = `${sourceUri}::${imageUri}`;
-                    const version = createHash("sha256").update(bytes).digest("hex");
-                    imageStore.put(id, bytes, version);
+                    // PDF files can be large. File metadata is enough to list them;
+                    // their bytes are loaded on demand when a thumbnail is visible.
+                    let version: string;
+                    if (mimeType === "application/pdf") {
+                        const stat = await vscode.workspace.fs.stat(uri);
+                        version = `${stat.mtime}:${stat.size}`;
+                    } else {
+                        const bytes = await vscode.workspace.fs.readFile(uri);
+                        version = createHash("sha256").update(bytes).digest("hex");
+                        imageStore.put(id, bytes, version);
+                    }
                     const name = basename(uri);
                     return {
                         id, imageUri, notebookUri: sourceUri, notebookName: sourceName,

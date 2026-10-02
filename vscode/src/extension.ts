@@ -97,9 +97,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
     const registerImageSource = async (source: NotebookFigures): Promise<void> => {
         const previous = figureRegistry.getNotebook(source.uri);
-        const liveIds = new Set(source.figures.map((figure) => figure.id));
+        const liveFigures = new Map(source.figures.map((figure) => [figure.id, figure]));
+        const previousFigures = new Map((previous?.figures ?? []).map((figure) => [figure.id, figure]));
         for (const figure of previous?.figures ?? []) {
-            if (!liveIds.has(figure.id)) imageStore.remove(figure.id);
+            if (!liveFigures.has(figure.id)) imageStore.remove(figure.id);
+        }
+        for (const figure of source.figures) {
+            if (figure.mimeType === "application/pdf" &&
+                previousFigures.get(figure.id)?.version !== figure.version) {
+                imageStore.remove(figure.id);
+            }
         }
         figureRegistry.setNotebook(source.uri, source.name, source.figures, source.kind);
         await refreshStarredSnapshots(source.figures);
